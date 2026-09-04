@@ -1,119 +1,151 @@
-import { useState, useEffect } from 'react'
-import { supabase } from './supabaseClient'
-import './App.css'
+import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { supabase } from "./supabaseClient";
+import "./App.css";
+
+import NavigatePage from "./pages/Navigate";
+import Buses from "./pages/Buses";
+import History from "./pages/History";
+import Profile from "./pages/Profile";
+import BottomNav from "./components/BottomNav";
 
 function App() {
-  const [phone, setPhone] = useState('+1234567890') // your test number
-  const [token, setToken] = useState('')
-  const [step, setStep] = useState('phone') // 'phone' | 'otp' | 'logged_in'
-  const [user, setUser] = useState(null)
-  const [message, setMessage] = useState('')
+  const [phone, setPhone] = useState("+1234567890");
+  const [token, setToken] = useState("");
+  const [step, setStep] = useState("phone");
+  const [user, setUser] = useState(null);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    // Check if user is already logged in
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        setUser(user)
-        setStep('logged_in')
+        setUser(user);
+        setStep("logged_in");
       }
-    })
-  }, [])
+    });
+  }, []);
 
-  // 1. Send OTP (Simulated for test numbers!)
+  // Send OTP
   const handleSendOtp = async (e) => {
-    e.preventDefault()
-    setMessage('Sending code...')
-    const { error } = await supabase.auth.signInWithOtp({ phone })
+    e.preventDefault();
+    setMessage("Sending code...");
+
+    const { error } = await supabase.auth.signInWithOtp({ phone });
 
     if (error) {
-      setMessage(`❌ Error: ${error.message}`)
+      setMessage(`❌ Error: ${error.message}`);
     } else {
-      setMessage('✅ Code sent! Enter your test OTP.')
-      setStep('otp')
+      setMessage("✅ Code sent! Enter your test OTP.");
+      setStep("otp");
     }
-  }
+  };
 
-  // 2. Verify OTP
+  // Verify OTP
   const handleVerifyOtp = async (e) => {
-    e.preventDefault()
-    setMessage('Verifying code...')
+    e.preventDefault();
+    setMessage("Verifying code...");
+
     const { data, error } = await supabase.auth.verifyOtp({
       phone,
       token,
-      type: 'sms',
-    })
+      type: "sms",
+    });
 
     if (error) {
-      setMessage(`❌ Verification failed: ${error.message}`)
+      setMessage(`❌ Verification failed: ${error.message}`);
     } else {
-      setUser(data.user)
-      setStep('logged_in')
-      setMessage('🎉 Successfully logged in!')
+      setUser(data.user);
+      setStep("logged_in");
+      setMessage("🎉 Successfully logged in!");
     }
-  }
+  };
 
-  // 3. Logout
+  // Logout
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setStep('phone')
-    setToken('')
-    setMessage('Logged out.')
+    await supabase.auth.signOut();
+    setUser(null);
+    setStep("phone");
+    setToken("");
+    setMessage("Logged out.");
+  };
+
+  // Authentication screen
+  if (step !== "logged_in") {
+    return (
+      <div
+        style={{
+          maxWidth: 400,
+          margin: "50px auto",
+          padding: 24,
+          border: "1px solid #333",
+          borderRadius: 12,
+          textAlign: "center",
+          fontFamily: "sans-serif",
+        }}
+      >
+        <h2>🚌 Transit Tracker Auth</h2>
+
+        {message && (
+          <p style={{ fontSize: 14, color: "#4ade80" }}>{message}</p>
+        )}
+
+        {step === "phone" && (
+          <form onSubmit={handleSendOtp}>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone number"
+              style={{
+                width: "100%",
+                padding: 10,
+                marginBottom: 12,
+                boxSizing: "border-box",
+              }}
+            />
+
+            <button type="submit">Send OTP</button>
+          </form>
+        )}
+
+        {step === "otp" && (
+          <form onSubmit={handleVerifyOtp}>
+            <input
+              type="text"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Enter OTP"
+              style={{
+                width: "100%",
+                padding: 10,
+                marginBottom: 12,
+                boxSizing: "border-box",
+              }}
+            />
+
+            <button type="submit">Verify OTP</button>
+          </form>
+        )}
+      </div>
+    );
   }
 
+  // Main Siga application
   return (
-    <div style={{ maxWidth: 400, margin: '50px auto', padding: 24, border: '1px solid #333', borderRadius: 12, textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h2>🚌 Transit Tracker Auth</h2>
+    <BrowserRouter>
+      <div className="min-h-screen bg-gray-50 pb-24">
+        <Routes>
+          <Route path="/" element={<Navigate to="/navigate" replace />} />
+          <Route path="/navigate" element={<NavigatePage />} />
+          <Route path="/buses" element={<Buses />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/profile" element={<Profile />} />
+        </Routes>
 
-      {message && <p style={{ fontSize: 14, color: '#4ade80' }}>{message}</p>}
-
-      {step === 'phone' && (
-        <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ textAlign: 'left', fontSize: 12 }}>Phone Number:</label>
-          <input
-            type="text"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+1234567890"
-            style={{ padding: 10, borderRadius: 6, border: '1px solid #555' }}
-            required
-          />
-          <button type="submit" style={{ padding: 10, borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}>
-            Send OTP Code
-          </button>
-        </form>
-      )}
-
-      {step === 'otp' && (
-        <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ textAlign: 'left', fontSize: 12 }}>Enter OTP Code (e.g. 123456):</label>
-          <input
-            type="text"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="123456"
-            style={{ padding: 10, borderRadius: 6, border: '1px solid #555' }}
-            required
-          />
-          <button type="submit" style={{ padding: 10, borderRadius: 6, background: '#16a34a', color: '#fff', border: 'none', cursor: 'pointer' }}>
-            Verify & Log In
-          </button>
-        </form>
-      )}
-
-      {step === 'logged_in' && (
-        <div>
-          <p>Logged in as:</p>
-          <code style={{ background: '#222', padding: 6, borderRadius: 4, display: 'block', wordBreak: 'break-all' }}>
-            {user?.phone || user?.id}
-          </code>
-          <button onClick={handleLogout} style={{ marginTop: 16, padding: 8, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-            Sign Out
-          </button>
-        </div>
-      )}
-    </div>
-  )
+        <BottomNav />
+      </div>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
