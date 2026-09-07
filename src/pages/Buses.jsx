@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
 import Card from "../components/Card";
 import Input from "../components/Input";
 import Button from "../components/Button";
@@ -6,49 +7,51 @@ import Button from "../components/Button";
 function Buses() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
+  const [buses, setBuses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const filters = ["All", "On Time", "Delayed", "Arriving Soon"];
 
-  const busesData = [
-    {
-      id: "BUS-101",
-      route: "Route 101: Kimironko ➔ Nyabugogo",
-      nextStop: "Gishushu",
-      eta: "4 min",
-      status: "On Time",
-      seatsAvailable: 12,
-      driver: "Jean Paul",
-    },
-    {
-      id: "BUS-204",
-      route: "Route 204: Remera ➔ Downtown",
-      nextStop: "KBC Station",
-      eta: "12 min",
-      status: "Delayed",
-      seatsAvailable: 3,
-      driver: "Eric M.",
-    },
-    {
-      id: "BUS-305",
-      route: "Route 305: Kanombe ➔ City Center",
-      nextStop: "Airport Junction",
-      eta: "2 min",
-      status: "Arriving Soon",
-      seatsAvailable: 8,
-      driver: "Claire N.",
-    },
-    {
-      id: "BUS-108",
-      route: "Route 108: Nyamirambo ➔ Kacyiru",
-      nextStop: "Mineduc",
-      eta: "8 min",
-      status: "On Time",
-      seatsAvailable: 15,
-      driver: "David K.",
-    },
-  ];
+  useEffect(() => {
+    async function fetchBuses() {
+      try {
+        setLoading(true);
+        setError(null);
 
-  const filteredBuses = busesData.filter((bus) => {
+        // Fetching buses along with route details
+        const { data, error: fetchError } = await supabase
+          .from("buses")
+          .select("*, routes(*)");
+
+        if (fetchError) throw fetchError;
+
+        if (data) {
+          const formattedData = data.map((bus) => ({
+            id: bus.bus_number || `BUS-${bus.id}`,
+            route: bus.routes
+              ? `Route ${bus.routes.route_number}: ${bus.routes.origin} ➔ ${bus.routes.destination}`
+              : "Unassigned Route",
+            nextStop: bus.current_stop || "In Transit",
+            eta: bus.eta || "N/A",
+            status: bus.status || "On Time",
+            seatsAvailable: bus.available_seats ?? 0,
+            driver: bus.driver_name || "Assigned Driver",
+          }));
+          setBuses(formattedData);
+        }
+      } catch (err) {
+        console.error("Error fetching buses:", err);
+        setError("Failed to load live bus data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchBuses();
+  }, []);
+
+  const filteredBuses = buses.filter((bus) => {
     const matchesSearch =
       bus.route.toLowerCase().includes(searchQuery.toLowerCase()) ||
       bus.nextStop.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -102,7 +105,15 @@ function Buses() {
 
       {/* Bus Results List */}
       <div className="space-y-4">
-        {filteredBuses.length > 0 ? (
+        {loading ? (
+          <Card className="p-8 text-center">
+            <p className="font-medium text-white/70">Loading live bus data...</p>
+          </Card>
+        ) : error ? (
+          <Card className="p-8 text-center">
+            <p className="font-medium text-red-400">{error}</p>
+          </Card>
+        ) : filteredBuses.length > 0 ? (
           filteredBuses.map((bus) => (
             <Card key={bus.id}>
               <div className="flex items-start justify-between">
