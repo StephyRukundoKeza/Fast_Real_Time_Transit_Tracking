@@ -2,7 +2,9 @@ function Card({ children, className = "", onClick }) {
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl bg-white p-4 shadow-sm ${onClick ? "cursor-pointer transition hover:shadow-md" : ""} ${className}`}
+      className={`rounded-2xl border border-white/5 bg-[#10243c] p-4 text-white shadow-none ${
+        onClick ? "cursor-pointer transition hover:border-white/15 hover:bg-[#142d4a]" : ""
+      } ${className}`}
     >
       {children}
     </div>

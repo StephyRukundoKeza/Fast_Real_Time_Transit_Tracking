@@ -10,7 +10,7 @@ function Input({
   return (
     <div className="w-full">
       {label && (
-        <label className="mb-2 block text-sm font-medium text-gray-700">
+        <label className="mb-2 block text-sm font-medium text-white/70">
           {label}
         </label>
       )}
@@ -21,8 +21,8 @@ function Input({
         onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
-        className={`w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${
-          disabled ? "cursor-not-allowed bg-gray-100 opacity-60" : ""
+        className={`w-full rounded-xl border border-white/10 bg-[#10243c] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/40 focus:border-[#20d9c2] focus:ring-2 focus:ring-[#20d9c2]/20 ${
+          disabled ? "cursor-not-allowed bg-white/5 opacity-60" : ""
         } ${className}`}
       />
     </div>

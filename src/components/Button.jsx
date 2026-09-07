@@ -8,10 +8,9 @@ function Button({
   className = "",
 }) {
   const variants = {
-    primary: "bg-blue-600 text-white hover:bg-blue-700",
-    secondary: "bg-gray-100 text-gray-800 hover:bg-gray-200",
-    outline:
-      "border border-gray-200 bg-white text-gray-800 hover:bg-gray-50",
+    primary: "bg-[#20d9c2] text-[#071426] hover:bg-[#18c5b0]",
+    secondary: "bg-white/10 text-white hover:bg-white/15",
+    outline: "border border-white/20 text-white hover:bg-white/5",
   };
 
   const sizes = {
