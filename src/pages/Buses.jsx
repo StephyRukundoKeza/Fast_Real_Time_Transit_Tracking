@@ -1,188 +1,527 @@
-import { useState, useEffect } from "react";
-import { supabase } from "../supabaseClient";
-import Card from "../components/Card";
-import Input from "../components/Input";
-import Button from "../components/Button";
+// src/pages/Buses.jsx
+import React, { useState } from 'react';
 
-function Buses() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFilter, setSelectedFilter] = useState("All");
-  const [buses, setBuses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const SEAT_LAYOUT = [
+  ...Array.from({ length: 8 }, (_, i) => {
+    const rowNum = i + 1;
+    const baseId = i * 3;
+    return {
+      row: rowNum,
+      A: { id: baseId + 1, label: baseId + 1, status: 'taken' },
+      B: { id: baseId + 2, label: baseId + 2, status: 'taken' },
+      C: { id: baseId + 3, label: baseId + 3, status: rowNum === 8 ? 'available' : 'taken' },
+    };
+  }),
+  {
+    row: 9,
+    A: { id: 25, label: 25, status: 'available' },
+    B: { id: 26, label: 26, status: 'available' },
+    C: { id: 27, label: 27, status: 'available' },
+  },
+  {
+    row: 10,
+    A: { id: 28, label: 28, status: 'available' },
+    B: null,
+    C: null,
+  },
+];
 
-  const filters = ["All", "On Time", "Delayed", "Arriving Soon"];
+function SeatSelectionModal({ bus, onClose }) {
+  const [step, setStep] = useState('select'); // 'select' | 'payment'
+  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [selectedBank, setSelectedBank] = useState('Bank of Kigali');
 
-  useEffect(() => {
-    async function fetchBuses() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetching buses along with route details
-        const { data, error: fetchError } = await supabase
-          .from("buses")
-          .select("*, routes(*)");
-
-        if (fetchError) throw fetchError;
-
-        if (data) {
-          const formattedData = data.map((bus) => ({
-            id: bus.bus_number || `BUS-${bus.id}`,
-            route: bus.routes
-              ? `Route ${bus.routes.route_number}: ${bus.routes.origin} ➔ ${bus.routes.destination}`
-              : "Unassigned Route",
-            nextStop: bus.current_stop || "In Transit",
-            eta: bus.eta || "N/A",
-            status: bus.status || "On Time",
-            seatsAvailable: bus.available_seats ?? 0,
-            driver: bus.driver_name || "Assigned Driver",
-          }));
-          setBuses(formattedData);
-        }
-      } catch (err) {
-        console.error("Error fetching buses:", err);
-        setError("Failed to load live bus data.");
-      } finally {
-        setLoading(false);
+  const toggleSeat = (seatId) => {
+    if (selectedSeats.includes(seatId)) {
+      setSelectedSeats(selectedSeats.filter((id) => id !== seatId));
+    } else {
+      if (selectedSeats.length >= 4) {
+        alert('You can only select up to 4 seats.');
+        return;
       }
+      setSelectedSeats([...selectedSeats, seatId]);
     }
-
-    fetchBuses();
-  }, []);
-
-  const filteredBuses = buses.filter((bus) => {
-    const matchesSearch =
-      bus.route.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      bus.nextStop.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      bus.id.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesFilter =
-      selectedFilter === "All" || bus.status === selectedFilter;
-
-    return matchesSearch && matchesFilter;
-  });
+  };
 
   return (
-    <div className="min-h-screen bg-[#071426] px-5 py-6 text-white">
-      {/* Header */}
-      <div className="mb-6">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#20d9c2]">
-          Siga Transit
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">Smart Search</h1>
-        <p className="mt-1 text-sm text-white/55">
-          Find active buses and live route updates
-        </p>
-      </div>
-
-      {/* Search Input */}
-      <div className="mb-4">
-        <Input
-          placeholder="Search by route, stop, or bus ID..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
-
-      {/* Filter Chips */}
-      <div className="mb-6 flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
-        {filters.map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            onClick={() => setSelectedFilter(filter)}
-            className={`whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition ${
-              selectedFilter === filter
-                ? "bg-[#20d9c2] text-[#071426]"
-                : "bg-[#10243c] text-white/70 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            {filter}
-          </button>
-        ))}
-      </div>
-
-      {/* Bus Results List */}
-      <div className="space-y-4">
-        {loading ? (
-          <Card className="p-8 text-center">
-            <p className="font-medium text-white/70">Loading live bus data...</p>
-          </Card>
-        ) : error ? (
-          <Card className="p-8 text-center">
-            <p className="font-medium text-red-400">{error}</p>
-          </Card>
-        ) : filteredBuses.length > 0 ? (
-          filteredBuses.map((bus) => (
-            <Card key={bus.id}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-xs font-bold text-[#20d9c2]">
-                    {bus.id}
-                  </span>
-                  <h2 className="mt-0.5 text-base font-semibold text-white">
-                    {bus.route}
-                  </h2>
-                </div>
-
-                <span
-                  className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
-                    bus.status === "On Time"
-                      ? "bg-[#20d9c2]/10 text-[#20d9c2]"
-                      : bus.status === "Delayed"
-                      ? "bg-red-500/15 text-red-400"
-                      : "bg-amber-500/15 text-amber-300"
-                  }`}
-                >
-                  {bus.status}
-                </span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/5 pt-3">
-                <div>
-                  <p className="text-[11px] text-white/40">Next Stop</p>
-                  <p className="mt-0.5 text-xs font-medium text-white/90">
-                    {bus.nextStop}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[11px] text-white/40">ETA</p>
-                  <p className="mt-0.5 text-xs font-medium text-[#20d9c2]">
-                    {bus.eta}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[11px] text-white/40">Open Seats</p>
-                  <p className="mt-0.5 text-xs font-medium text-white/90">
-                    {bus.seatsAvailable} seats
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                size="small"
-                className="mt-4"
-                onClick={() => alert(`Tracking ${bus.id}`)}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
+      <div className="relative w-full max-w-[360px] overflow-hidden rounded-[40px] border-[8px] border-slate-950 bg-[#f4f7fc] shadow-2xl">
+        
+        {/* Dark Blue Header */}
+        <div className="bg-[#0e1b42] px-5 pt-8 pb-5 text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={step === 'payment' ? () => setStep('select') : onClose}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-lg hover:bg-white/20 transition-colors"
               >
-                Track Bus
-              </Button>
-            </Card>
-          ))
-        ) : (
-          <Card className="p-8 text-center">
-            <p className="font-medium text-white">No buses found</p>
-            <p className="mt-1 text-sm text-white/40">
-              Try adjusting your search or filter settings.
-            </p>
-          </Card>
+                ‹
+              </button>
+              <div>
+                <h1 className="text-sm font-bold tracking-tight">
+                  {step === 'select' ? 'Select Your Seat' : 'Payment Method'}
+                </h1>
+                <p className="text-[10px] text-slate-300">
+                  {bus ? bus.routeName : 'Nyabugogo → Muhanga'} • {bus ? bus.eta : '07:00'}
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-white text-xs">✕</button>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between text-[10px]">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-white/10 px-2 py-0.5 font-bold text-white">
+                {bus ? bus.id : 'RAL 567 C'}
+              </span>
+              <span className="text-slate-300">Alexis Rusingizandekwe</span>
+            </div>
+            <span className="font-bold text-amber-400">
+              {selectedSeats.length}/4 Selected
+            </span>
+          </div>
+        </div>
+
+        {/* STEP 1: SEAT SELECTION */}
+        {step === 'select' && (
+          <div className="p-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+              <div className="mb-6 flex justify-center">
+                <div className="flex items-center gap-1.5 rounded-full bg-[#0e1b42] px-5 py-1 text-[11px] font-bold text-white shadow-sm">
+                  <span className="text-[10px] text-teal-400">❖</span> DRIVER
+                </div>
+              </div>
+
+              {/* Column Headers A B ... C */}
+              <div className="mb-2 grid grid-cols-[20px_1fr_16px_1fr] items-center text-center text-[10px] font-semibold text-slate-400">
+                <span />
+                <div className="grid grid-cols-2 gap-2">
+                  <span>A</span>
+                  <span>B</span>
+                </div>
+                <span />
+                <div className="flex justify-center">
+                  <span>C</span>
+                </div>
+              </div>
+
+              {/* Seat Grid */}
+              <div className="space-y-2 text-center text-[11px] font-medium">
+                {SEAT_LAYOUT.map((row) => (
+                  <div key={row.row} className="grid grid-cols-[20px_1fr_16px_1fr] items-center">
+                    <span className="text-left text-[10px] font-medium text-slate-400">
+                      {row.row}
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {row.A ? (
+                        <SeatButton
+                          seat={row.A}
+                          isSelected={selectedSeats.includes(row.A.id)}
+                          onClick={() => toggleSeat(row.A.id)}
+                        />
+                      ) : <div />}
+                      {row.B ? (
+                        <SeatButton
+                          seat={row.B}
+                          isSelected={selectedSeats.includes(row.B.id)}
+                          onClick={() => toggleSeat(row.B.id)}
+                        />
+                      ) : <div />}
+                    </div>
+
+                    <div className="flex items-center justify-center">
+                      <span className="h-4 border-r border-slate-200" />
+                    </div>
+
+                    <div className="flex justify-center">
+                      {row.C ? (
+                        <SeatButton
+                          seat={row.C}
+                          isSelected={selectedSeats.includes(row.C.id)}
+                          onClick={() => toggleSeat(row.C.id)}
+                        />
+                      ) : <div className="w-8" />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <hr className="my-4 border-slate-100" />
+
+              {/* Legend */}
+              <div className="flex items-center justify-center gap-4 text-[10px] text-slate-500">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3.5 w-3.5 rounded border border-amber-500 bg-amber-50" />
+                  <span>Available</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3.5 w-3.5 rounded bg-[#0e1b42]" />
+                  <span>Selected</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3.5 w-3.5 rounded border border-slate-200 bg-slate-100" />
+                  <span>Taken</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Buy Ticket Button */}
+            <button
+              disabled={selectedSeats.length === 0}
+              onClick={() => setStep('payment')}
+              className="mt-4 w-full rounded-2xl bg-[#0e1b42] py-3 text-xs font-bold text-white shadow-lg transition-all hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Buy Ticket ({selectedSeats.length})
+            </button>
+          </div>
         )}
+
+        {/* STEP 2: PAYMENT CARD */}
+        {step === 'payment' && (
+          <div className="p-4 space-y-3">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm space-y-3">
+              <h2 className="text-xs font-bold text-slate-800">Select Payment Option</h2>
+
+              {/* Mobile Money Options */}
+              <button
+                onClick={() => setPaymentMethod('momo')}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
+                  paymentMethod === 'momo'
+                    ? 'border-yellow-500 bg-yellow-50 text-slate-900 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-yellow-400 font-bold text-[10px] text-black">
+                    💛
+                  </span>
+                  <span>MTN MoMo</span>
+                </div>
+                <span className="text-[10px] text-slate-400">Mobile</span>
+              </button>
+
+              <button
+                onClick={() => setPaymentMethod('airtel')}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
+                  paymentMethod === 'airtel'
+                    ? 'border-red-500 bg-red-50 text-slate-900 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-500 font-bold text-[10px] text-white">
+                    🔴
+                  </span>
+                  <span>Airtel Money</span>
+                </div>
+                <span className="text-[10px] text-slate-400">Mobile</span>
+              </button>
+
+              {/* Apple Pay */}
+              <button
+                onClick={() => setPaymentMethod('apple')}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
+                  paymentMethod === 'apple'
+                    ? 'border-black bg-slate-900 text-white shadow-sm'
+                    : 'border-slate-200 bg-slate-50/60 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-sm">🍎</span>
+                  <span>Apple Pay</span>
+                </div>
+                <span className="text-[10px] text-slate-400">Digital Wallet</span>
+              </button>
+
+              {/* Bank Transfer with Dropdown */}
+              <div
+                className={`rounded-xl border transition-all ${
+                  paymentMethod === 'bank'
+                    ? 'border-blue-600 bg-blue-50/50 p-3 shadow-sm'
+                    : 'border-slate-200 bg-slate-50/60 p-3 hover:bg-slate-100'
+                }`}
+              >
+                <button
+                  onClick={() => setPaymentMethod('bank')}
+                  className="w-full flex items-center justify-between text-xs font-semibold text-slate-700"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-sm">🏦</span>
+                    <span>Bank Transfer</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Card / App</span>
+                </button>
+
+                {paymentMethod === 'bank' && (
+                  <div className="mt-3 pt-2 border-t border-slate-200/60 space-y-1.5">
+                    <label className="text-[10px] font-medium text-slate-500">Choose Bank:</label>
+                    <select
+                      value={selectedBank}
+                      onChange={(e) => setSelectedBank(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-semibold text-slate-800 outline-none focus:border-blue-500"
+                    >
+                      <option value="Bank of Kigali">Bank of Kigali (BK)</option>
+                      <option value="Equity Bank">Equity Bank</option>
+                      <option value="Banque Populaire">Banque Populaire (BPR)</option>
+                      <option value="I&M Bank">I&M Bank</option>
+                      <option value="NCBA Bank">NCBA Bank</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Confirm Payment Button */}
+            <button
+              disabled={!paymentMethod}
+              onClick={() => {
+                alert(`Payment confirmed via ${paymentMethod === 'bank' ? selectedBank : paymentMethod}!`);
+                onClose();
+              }}
+              className="w-full rounded-2xl bg-[#0e1b42] py-3 text-xs font-bold text-white shadow-lg transition-all hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Pay Now
+            </button>
+          </div>
+        )}
+
       </div>
     </div>
   );
 }
 
-export default Buses;
+function SeatButton({ seat, isSelected, onClick }) {
+  if (isSelected) {
+    return (
+      <button
+        onClick={onClick}
+        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0e1b42] text-xs font-bold text-white shadow-md transition-transform active:scale-95"
+      >
+        {seat.label}
+      </button>
+    );
+  }
+
+  if (seat.status === 'taken') {
+    return (
+      <button
+        disabled
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed"
+      >
+        <svg className="h-4 w-4 fill-slate-300" viewBox="0 0 24 24">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+        </svg>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-amber-500 bg-amber-50 text-xs font-bold text-amber-700 hover:bg-amber-100 transition-transform active:scale-95"
+    >
+      {seat.label}
+    </button>
+  );
+}
+
+const INITIAL_BUSES = [
+  {
+    id: 'RAC 245B',
+    routeCode: 'Route R2',
+    routeName: 'Kimisagara ➔ Downtown',
+    status: 'active',
+    statusTag: 'On Time',
+    statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    nextStop: 'Nyabugogo Market',
+    eta: '4 mins',
+    totalSeats: 28,
+    occupiedSeats: [2, 3, 5, 8, 9, 12, 14, 15, 18, 19, 21, 24, 25, 27]
+  },
+  {
+    id: 'RTA 318C',
+    routeCode: 'Route R3',
+    routeName: 'Remera ➔ Nyabugogo',
+    status: 'active',
+    statusTag: 'Delayed',
+    statusColor: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+    nextStop: 'Kigali Heights',
+    eta: '14 mins',
+    totalSeats: 28,
+    occupiedSeats: [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27]
+  },
+  {
+    id: 'KBC 102A',
+    routeCode: 'Route R1',
+    routeName: 'Nyabugogo ➔ Kimironko',
+    status: 'active',
+    statusTag: 'Arriving Soon',
+    statusColor: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    nextStop: 'Gishushu Stop',
+    eta: '1 min',
+    totalSeats: 28,
+    occupiedSeats: [1, 4, 6, 7, 10, 11, 13, 16, 17, 20, 22, 23, 26, 28]
+  },
+  {
+    id: 'RAD 512D',
+    routeCode: 'Route R4',
+    routeName: 'Nyamirambo ➔ City Center',
+    status: 'active',
+    statusTag: 'On Time',
+    statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    nextStop: 'Biryogo Junction',
+    eta: '7 mins',
+    totalSeats: 28,
+    occupiedSeats: [3, 5, 9, 11, 15, 18, 21, 24]
+  }
+];
+
+export default function Buses() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [selectedBusForModal, setSelectedBusForModal] = useState(null);
+
+  const filterTabs = ['All', 'On Time', 'Delayed', 'Arriving Soon'];
+
+  const filteredBuses = INITIAL_BUSES.filter((bus) => {
+    const matchesSearch =
+      bus.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bus.routeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bus.routeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bus.nextStop.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesFilter =
+      activeFilter === 'All' || bus.statusTag.toLowerCase() === activeFilter.toLowerCase();
+
+    return matchesSearch && matchesFilter;
+  });
+
+  return (
+    <div className="min-h-screen w-full bg-slate-950 text-slate-100 p-4 md:p-6 font-sans">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-white tracking-wide">Bus Directory</h1>
+        <p className="text-xs text-slate-400 mt-1">Find active buses and select available seats</p>
+      </div>
+
+      <div className="relative mb-4">
+        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by route, stop, or bus ID..."
+          className="w-full bg-slate-900/90 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-8 py-3 outline-none focus:border-cyan-500/60 transition-all shadow-md"
+        />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 no-scrollbar">
+        {filterTabs.map((tab) => {
+          const isActive = activeFilter === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveFilter(tab)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
+                isActive
+                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
+                  : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'
+              }`}
+            >
+              {tab}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="space-y-4">
+        {filteredBuses.length > 0 ? (
+          filteredBuses.map((bus) => {
+            const openCount = bus.totalSeats - bus.occupiedSeats.length;
+            return (
+              <div
+                key={bus.id}
+                className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-4 hover:border-slate-700/60 transition-all"
+              >
+                <div className="flex items-start justify-between border-b border-slate-800/80 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold bg-slate-800 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
+                        {bus.id}
+                      </span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${bus.statusColor}`}>
+                        {bus.statusTag}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white mt-1">
+                      <span className="text-slate-400 mr-1.5">{bus.routeCode}:</span>
+                      {bus.routeName}
+                    </h3>
+                  </div>
+
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                    {bus.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center py-1">
+                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                    <p className="text-[9px] font-semibold text-slate-400 uppercase">Next Stop</p>
+                    <p className="text-xs font-bold text-slate-200 mt-0.5 truncate">{bus.nextStop}</p>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                    <p className="text-[9px] font-semibold text-slate-400 uppercase">ETA</p>
+                    <p className="text-xs font-bold text-cyan-400 mt-0.5">{bus.eta}</p>
+                  </div>
+
+                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                    <p className="text-[9px] font-semibold text-slate-400 uppercase">Open Seats</p>
+                    <p className="text-xs font-bold text-emerald-400 mt-0.5">
+                      {openCount} <span className="text-[9px] text-slate-500">/ {bus.totalSeats}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setSelectedBusForModal(bus)}
+                    className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/10 active:scale-[0.99]"
+                  >
+                    <span>💺</span>
+                    <span>Select Seats</span>
+                  </button>
+
+                  <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold py-2.5 px-3.5 rounded-xl border border-slate-700/60 transition-all active:scale-[0.99]">
+                    <span>🚌 Track</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-12 text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800/50">
+            <span className="text-3xl block mb-2">🚌</span>
+            <p className="text-xs font-medium">No buses found matching your search</p>
+          </div>
+        )}
+      </div>
+
+      {selectedBusForModal && (
+        <SeatSelectionModal 
+          bus={selectedBusForModal} 
+          onClose={() => setSelectedBusForModal(null)} 
+        />
+      )}
+    </div>
+  );
+}
