@@ -1,7 +1,7 @@
 // src/pages/Buses.jsx
 import React, { useState } from 'react';
 
-// Sample Operators
+// Transport Operators
 const OPERATORS = [
   {
     id: 'volcano',
@@ -365,34 +365,111 @@ function SeatButton({ seat, isSelected, onClick }) {
 }
 
 const INITIAL_BUSES = [
+  // Volcano Express
   {
     id: 'RAC 245B',
     operatorId: 'volcano',
     operatorName: 'Volcano Express',
     routeCode: 'Route V1',
-    routeName: 'Kimisagara ➔ Downtown',
+    routeName: 'Kigali ➔ Musanze',
     status: 'active',
     statusTag: 'On Time',
     statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-    nextStop: 'Nyabugogo Market',
+    nextStop: 'Nyabugogo Terminal',
     eta: '4 mins',
     totalSeats: 28,
     occupiedSeats: [2, 3, 5, 8, 9, 12, 14, 15, 18, 19, 21, 24, 25, 27]
   },
   {
-    id: 'RTA 318C',
-    operatorId: 'virunga',
-    operatorName: 'Virunga Express',
+    id: 'RAD 890C',
+    operatorId: 'volcano',
+    operatorName: 'Volcano Express',
     routeCode: 'Route V2',
-    routeName: 'Remera ➔ Nyabugogo',
+    routeName: 'Kigali ➔ Huye',
+    status: 'active',
+    statusTag: 'On Time',
+    statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    nextStop: 'Muhanga Stop',
+    eta: '12 mins',
+    totalSeats: 28,
+    occupiedSeats: [1, 4, 7, 10, 11, 16]
+  },
+  {
+    id: 'RAB 112E',
+    operatorId: 'volcano',
+    operatorName: 'Volcano Express',
+    routeCode: 'Route V3',
+    routeName: 'Huye ➔ Kigali',
     status: 'active',
     statusTag: 'Delayed',
     statusColor: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
-    nextStop: 'Kigali Heights',
+    nextStop: 'Nyanza Junction',
+    eta: '18 mins',
+    totalSeats: 28,
+    occupiedSeats: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  },
+
+  // Virunga Express
+  {
+    id: 'RTA 318C',
+    operatorId: 'virunga',
+    operatorName: 'Virunga Express',
+    routeCode: 'Route VIR-1',
+    routeName: 'Kigali ➔ Rubavu',
+    status: 'active',
+    statusTag: 'Delayed',
+    statusColor: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
+    nextStop: 'Nyirangarama',
     eta: '14 mins',
     totalSeats: 28,
     occupiedSeats: [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27]
   },
+  {
+    id: 'RAE 404K',
+    operatorId: 'virunga',
+    operatorName: 'Virunga Express',
+    routeCode: 'Route VIR-2',
+    routeName: 'Rubavu ➔ Musanze',
+    status: 'active',
+    statusTag: 'Arriving Soon',
+    statusColor: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    nextStop: 'Musanze Center',
+    eta: '2 mins',
+    totalSeats: 28,
+    occupiedSeats: [3, 6, 9, 12, 15]
+  },
+
+  // Shalom Express
+  {
+    id: 'RAD 512D',
+    operatorId: 'shalom',
+    operatorName: 'Shalom Express',
+    routeCode: 'Route S1',
+    routeName: 'Kigali ➔ Karongi',
+    status: 'active',
+    statusTag: 'On Time',
+    statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    nextStop: 'Muhanga Park',
+    eta: '7 mins',
+    totalSeats: 28,
+    occupiedSeats: [3, 5, 9, 11, 15, 18, 21, 24]
+  },
+  {
+    id: 'RAF 771B',
+    operatorId: 'shalom',
+    operatorName: 'Shalom Express',
+    routeCode: 'Route S2',
+    routeName: 'Karongi ➔ Kigali',
+    status: 'active',
+    statusTag: 'On Time',
+    statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    nextStop: 'Ruhango Stop',
+    eta: '10 mins',
+    totalSeats: 28,
+    occupiedSeats: [1, 2, 4, 5, 8, 10, 12, 14]
+  },
+
+  // RFTC
   {
     id: 'KBC 102A',
     operatorId: 'rftc',
@@ -408,18 +485,62 @@ const INITIAL_BUSES = [
     occupiedSeats: [1, 4, 6, 7, 10, 11, 13, 16, 17, 20, 22, 23, 26, 28]
   },
   {
-    id: 'RAD 512D',
-    operatorId: 'shalom',
-    operatorName: 'Shalom Express',
-    routeCode: 'Route S1',
-    routeName: 'Nyamirambo ➔ City Center',
+    id: 'RCA 901M',
+    operatorId: 'rftc',
+    operatorName: 'RFTC',
+    routeCode: 'Route R2',
+    routeName: 'Downtown ➔ Nyamirambo',
     status: 'active',
     statusTag: 'On Time',
     statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-    nextStop: 'Biryogo Junction',
-    eta: '7 mins',
+    nextStop: 'Biryogo',
+    eta: '3 mins',
     totalSeats: 28,
-    occupiedSeats: [3, 5, 9, 11, 15, 18, 21, 24]
+    occupiedSeats: [2, 5, 8, 12, 18, 20]
+  },
+  {
+    id: 'RCB 334X',
+    operatorId: 'rftc',
+    operatorName: 'RFTC',
+    routeCode: 'Route R5',
+    routeName: 'Remera ➔ Kanombe',
+    status: 'active',
+    statusTag: 'On Time',
+    statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    nextStop: 'Kipharma',
+    eta: '5 mins',
+    totalSeats: 28,
+    occupiedSeats: [1, 3, 7, 9, 11, 13, 15, 17]
+  },
+
+  // RTCO
+  {
+    id: 'RDA 650A',
+    operatorId: 'rtco',
+    operatorName: 'RTCO',
+    routeCode: 'Route RTC-1',
+    routeName: 'Kigali ➔ Rusizi',
+    status: 'active',
+    statusTag: 'On Time',
+    statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    nextStop: 'Nyamagabe',
+    eta: '25 mins',
+    totalSeats: 28,
+    occupiedSeats: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+  },
+  {
+    id: 'RDB 221P',
+    operatorId: 'rtco',
+    operatorName: 'RTCO',
+    routeCode: 'Route RTC-2',
+    routeName: 'Kigali ➔ Nyagatare',
+    status: 'active',
+    statusTag: 'Arriving Soon',
+    statusColor: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    nextStop: 'Kayoza Stop',
+    eta: '2 mins',
+    totalSeats: 28,
+    occupiedSeats: [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 25]
   }
 ];
 

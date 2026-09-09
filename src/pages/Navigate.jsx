@@ -1,149 +1,352 @@
 // src/pages/Navigate.jsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-const POPULAR_DESTINATIONS = [
-  { name: 'Kimironko Market', distance: '6.8 km', duration: '18 min', eta: '10:45 AM', traffic: 'moderate', trafficColor: 'bg-amber-500', trafficText: 'Moderate Traffic' },
-  { name: 'Remera Bus Park', distance: '4.2 km', duration: '12 min', eta: '10:39 AM', traffic: 'good', trafficColor: 'bg-emerald-500', trafficText: 'Smooth Traffic' },
-  { name: 'Nyabugogo Terminal', distance: '8.5 km', duration: '32 min', eta: '10:59 AM', traffic: 'bad', trafficColor: 'bg-rose-500', trafficText: 'Heavy Traffic' },
-  { name: 'Kicukiro Centre', distance: '5.1 km', duration: '15 min', eta: '10:42 AM', traffic: 'good', trafficColor: 'bg-emerald-500', trafficText: 'Smooth Traffic' },
-  { name: 'Nyamirambo Stadium', distance: '7.0 km', duration: '22 min', eta: '10:49 AM', traffic: 'moderate', trafficColor: 'bg-amber-500', trafficText: 'Moderate Traffic' },
-  { name: 'Musanze Bus Stop', distance: '92.0 km', duration: '2h 15m', eta: '12:42 PM', traffic: 'good', trafficColor: 'bg-emerald-500', trafficText: 'Clear Highway' }
+// Fix Leaflet's default marker icon path issue in React environments
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Custom Leaflet Markers using HTML/SVG divs to match your emerald and rose designs
+const createCustomIcon = (emoji, bgColor) => L.divIcon({
+  className: 'custom-leaflet-marker',
+  html: `
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <div style="background-color: ${bgColor}; width: 36px; height: 36px; border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3); font-size: 14px;">
+        ${emoji}
+      </div>
+    </div>
+  `,
+  iconSize: [36, 36],
+  iconAnchor: [18, 18],
+});
+
+const userIcon = createCustomIcon('📍', '#10b981');
+const destinationIcon = createCustomIcon('🎯', '#e11d48');
+
+// Helper component to smoothly pan the Leaflet camera from user location to destination and back
+function MapCameraController({ focus, destinationCoords, userCoords }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (focus === 'destination' && destinationCoords) {
+      map.flyTo(destinationCoords, 15, { duration: 0.8 });
+      const timer = setTimeout(() => {
+        map.flyTo(userCoords, 14, { duration: 0.8 });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [focus, destinationCoords, userCoords, map]);
+
+  return null;
+}
+
+const INITIAL_NOTIFICATIONS = [
+  { id: 1, text: 'Shortcut detected (+3 mins faster)', time: 'Just now', icon: '⚡' },
+  { id: 2, text: 'Heavy traffic ahead on KN 5 Rd', time: '2 mins ago', icon: '🚨' },
+  { id: 3, text: 'Nearing Downtown Bus Station', time: '5 mins ago', icon: '🚏' },
+  { id: 4, text: '10 mins remaining till your destination', time: '10 mins ago', icon: '⏳' },
+  { id: 5, text: 'You have reached your destination', time: 'Yesterday', icon: '🎉' },
 ];
 
+const POPULAR_PLACES = [
+  { 
+    id: 1, 
+    name: 'Downtown Bus Station', 
+    category: 'Transit Station', 
+    distance: '1.2 km', 
+    eta: '4 mins', 
+    arrivalTime: '11:45 AM', 
+    traffic: 'green',
+    latlng: [-1.9441, 30.0619]
+  },
+  { 
+    id: 2, 
+    name: 'Kigali Heights Mall', 
+    category: 'Shopping Center', 
+    distance: '2.5 km', 
+    eta: '8 mins', 
+    arrivalTime: '11:49 AM', 
+    traffic: 'yellow',
+    latlng: [-1.9536, 30.0915]
+  },
+  { 
+    id: 3, 
+    name: 'Nyabugogo Bus Park', 
+    category: 'Major Terminal', 
+    distance: '3.8 km', 
+    eta: '14 mins', 
+    arrivalTime: '11:55 AM', 
+    traffic: 'red',
+    latlng: [-1.9366, 30.0445]
+  },
+  { 
+    id: 4, 
+    name: 'Convention Centre', 
+    category: 'Landmark', 
+    distance: '4.1 km', 
+    eta: '12 mins', 
+    arrivalTime: '11:53 AM', 
+    traffic: 'green',
+    latlng: [-1.9546, 30.0933]
+  },
+];
+
+const USER_LOCATION = [-1.9501, 30.0588];
+
 export default function Navigate() {
-  const [query, setQuery] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState(null);
-  const dropdownRef = useRef(null);
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  const [activeRoute, setActiveRoute] = useState(null);
+  const [cameraFocus, setCameraFocus] = useState('user');
 
-  // Filter places based on user input
-  const suggestions = POPULAR_DESTINATIONS.filter(item =>
-    item.name.toLowerCase().includes(query.toLowerCase())
-  );
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSelect = (item) => {
-    setQuery(item.name);
-    setSelectedRoute(item);
-    setIsOpen(false);
+  const triggerCameraAnimation = () => {
+    setCameraFocus('destination');
+    setTimeout(() => {
+      setCameraFocus('user');
+    }, 2000);
   };
 
-  const handleClear = () => {
-    setQuery('');
-    setSelectedRoute(null);
-    setIsOpen(false);
+  const handleClearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const handleSelectDestination = (place) => {
+    setSearchQuery(place.name);
+    setActiveRoute(place);
+    setIsFocused(false);
+    triggerCameraAnimation();
+  };
+
+  const handleSearchSubmit = (e) => {
+    if (e.key === 'Enter' && searchQuery.trim().length > 0) {
+      const match = POPULAR_PLACES.find(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) || {
+        name: searchQuery,
+        category: 'Destination',
+        distance: '3.0 km',
+        eta: '10 mins',
+        arrivalTime: '11:51 AM',
+        traffic: 'green',
+        latlng: [-1.9480, 30.0700]
+      };
+      setActiveRoute(match);
+      setIsFocused(false);
+      triggerCameraAnimation();
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setActiveRoute(null);
+    setCameraFocus('user');
+  };
+
+  const filteredPlaces = POPULAR_PLACES.filter(place =>
+    place.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    place.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const showSuggestions = isFocused && searchQuery.trim().length > 0 && !activeRoute;
+
+  const trafficConfig = {
+    green: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', dot: 'bg-emerald-500', label: 'Good Traffic' },
+    yellow: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', dot: 'bg-amber-500', label: 'Moderate Traffic' },
+    red: { bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20', dot: 'bg-rose-500', label: 'Heavy Traffic' }
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-slate-950 p-0 font-sans text-white overflow-x-hidden">
-      {/* 1. Map Viewport Container */}
-      <div 
-        className="w-[75%] h-[75vh] rounded-r-2xl overflow-hidden relative border-r border-b border-slate-800 shadow-2xl bg-cover bg-center"
-        style={{
-          backgroundImage: `url('https://tile.openstreetmap.org/15/18663/16843.png')`
-        }}
+    <div className="relative h-screen w-screen overflow-hidden bg-slate-900 select-none">
+      
+      {/* REAL LEAFLET OPENSTREETMAP CANVAS */}
+      <MapContainer 
+        center={USER_LOCATION} 
+        zoom={14} 
+        zoomControl={false}
+        className="absolute inset-0 h-full w-full z-0"
       >
-        <div className="absolute inset-0 bg-slate-950/40" />
-        
-        {/* Label indicator */}
-        <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md text-slate-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-700/60">
-          Kigali Map Viewport
-        </div>
-      </div>
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
 
-      {/* 2. Destination Search Input & Route Metrics */}
-      <div className="p-4 w-[75%] max-w-md relative space-y-3" ref={dropdownRef}>
-        <div className="relative flex items-center">
-          <span className="absolute left-3.5 text-slate-400 text-sm">🔍</span>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setIsOpen(true);
-            }}
-            onFocus={() => setIsOpen(true)}
-            placeholder="Search your destination..."
-            className="w-full bg-slate-900/90 border border-slate-800 focus:border-amber-400/70 text-xs font-medium text-white placeholder-slate-500 rounded-xl pl-10 pr-8 py-3 outline-none transition-all shadow-lg"
-          />
-          {query && (
-            <button
-              onClick={handleClear}
-              className="absolute right-3 text-slate-400 hover:text-white text-xs"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        {/* CURRENT USER MARKER */}
+        <Marker position={USER_LOCATION} icon={userIcon}>
+          <Popup>You are here</Popup>
+        </Marker>
 
-        {/* Dropdown Suggestions */}
-        {isOpen && suggestions.length > 0 && (
-          <div className="absolute left-4 right-4 mt-1 bg-slate-900/95 border border-slate-800 rounded-xl shadow-2xl overflow-hidden z-30 backdrop-blur-md max-h-48 overflow-y-auto">
-            {suggestions.map((item, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSelect(item)}
-                className="w-full text-left px-4 py-2.5 text-xs text-slate-200 hover:bg-slate-800/80 hover:text-amber-400 border-b border-slate-800/40 last:border-0 transition-colors flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 text-[10px]">📍</span>
-                  <span>{item.name}</span>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono">{item.distance}</span>
-              </button>
-            ))}
-          </div>
+        {/* DESTINATION MARKER */}
+        {activeRoute && activeRoute.latlng && (
+          <Marker position={activeRoute.latlng} icon={destinationIcon}>
+            <Popup>{activeRoute.name}</Popup>
+          </Marker>
         )}
 
-        {/* 3. Selected Route Info Panel (Appears after selecting a destination) */}
-        {selectedRoute && (
-          <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-md space-y-3">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Destination Details
-              </span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${selectedRoute.trafficColor} animate-pulse`} />
-                <span className="text-[10px] font-bold text-slate-300">
-                  {selectedRoute.trafficText}
+        <MapCameraController 
+          focus={cameraFocus} 
+          destinationCoords={activeRoute?.latlng} 
+          userCoords={USER_LOCATION} 
+        />
+      </MapContainer>
+
+      {/* NOTIFICATIONS CONTAINER */}
+      <div className="absolute top-6 right-8 z-50 flex flex-col items-end">
+        <button 
+          onClick={() => setShowNotifications(!showNotifications)}
+          className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-200 shadow-2xl backdrop-blur-md hover:bg-slate-800 active:scale-95 transition-all"
+        >
+          <span className="text-base">🔔</span>
+          {notifications.length > 0 && (
+            <span className="absolute top-2.5 right-2.5 h-2.5 w-2.5 rounded-full bg-cyan-400 ring-2 ring-slate-950" />
+          )}
+        </button>
+
+        {showNotifications && (
+          <div className="mt-3 w-72 max-w-[calc(100vw-3rem)] rounded-2xl border border-slate-800 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold text-white tracking-wider uppercase">Notifications</h3>
+                <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-400 border border-cyan-500/20">
+                  {notifications.length}
+                </span>
+              </div>
+              {notifications.length > 0 && (
+                <button 
+                  onClick={handleClearNotifications}
+                  className="text-[10px] font-bold text-slate-400 hover:text-cyan-400 transition-colors uppercase tracking-wider"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {notifications.length > 0 ? (
+              <div className="space-y-2">
+                {notifications.map((item) => (
+                  <div 
+                    key={item.id} 
+                    className="flex items-start gap-3 rounded-xl bg-slate-800/40 p-2.5 border border-slate-800/60 hover:bg-slate-800/80 transition-all"
+                  >
+                    <span className="text-base mt-0.5">{item.icon}</span>
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-slate-200 leading-snug">{item.text}</p>
+                      <span className="text-[9px] font-semibold text-slate-400 mt-0.5 block">{item.time}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-6 text-center">
+                <p className="text-xs text-slate-400">No new notifications</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* BOTTOM CONTROL STACK */}
+      <div className="absolute bottom-3 left-6 md:left-12 z-40 w-full max-w-md px-4 flex flex-col gap-3 transition-all duration-300">
+        
+        {/* SEARCH INPUT CONTAINER */}
+        <div className="relative w-full">
+          {showSuggestions && (
+            <div className="absolute bottom-full mb-2 left-0 right-0 rounded-2xl border border-slate-800 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl">
+              {filteredPlaces.length > 0 ? (
+                filteredPlaces.map((place) => (
+                  <button
+                    key={place.id}
+                    onMouseDown={() => handleSelectDestination(place)}
+                    className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-left hover:bg-slate-800/80 transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-slate-400 group-hover:text-cyan-400">🔍</span>
+                      <div>
+                        <div className="text-xs font-medium text-slate-200 group-hover:text-white">
+                          {place.name}
+                        </div>
+                        <div className="text-[10px] text-slate-400">{place.category}</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-slate-400">{place.distance}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-xs text-slate-400">No matching places</div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 shadow-2xl backdrop-blur-md focus-within:border-cyan-500/50 transition-all">
+            <span className="text-slate-400 text-sm">🔍</span>
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (activeRoute) setActiveRoute(null);
+              }}
+              onKeyDown={handleSearchSubmit}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+              placeholder="Search destination or station..."
+              className="w-full bg-transparent text-sm text-white placeholder-slate-400 outline-none"
+            />
+            {searchQuery && (
+              <button 
+                onClick={handleClearSearch}
+                className="text-xs text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ACTIVE DESTINATION STATS CARD */}
+        {activeRoute && (
+          <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-base">🏁</span>
+                <div>
+                  <h4 className="text-xs font-bold text-white leading-none">{activeRoute.name}</h4>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">{activeRoute.category || 'Destination'}</span>
+                </div>
+              </div>
+              
+              <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 border ${trafficConfig[activeRoute.traffic || 'green'].bg} ${trafficConfig[activeRoute.traffic || 'green'].border}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${trafficConfig[activeRoute.traffic || 'green'].dot}`} />
+                <span className={`text-[10px] font-bold ${trafficConfig[activeRoute.traffic || 'green'].text}`}>
+                  {trafficConfig[activeRoute.traffic || 'green'].label}
                 </span>
               </div>
             </div>
 
-            {/* Metrics Grid */}
             <div className="grid grid-cols-3 gap-2 text-center">
-              {/* Distance */}
-              <div className="bg-slate-950/50 p-2 rounded-xl border border-slate-800/60">
-                <p className="text-[9px] font-semibold text-slate-400 uppercase">Distance</p>
-                <p className="text-xs font-bold text-white mt-0.5">{selectedRoute.distance}</p>
+              <div className="rounded-xl bg-slate-800/40 p-2 border border-slate-800/60">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Remaining</span>
+                <span className="text-sm font-extrabold text-cyan-400 mt-0.5 block">{activeRoute.eta || '10 mins'}</span>
               </div>
-
-              {/* Remaining Time */}
-              <div className="bg-slate-950/50 p-2 rounded-xl border border-slate-800/60">
-                <p className="text-[9px] font-semibold text-slate-400 uppercase">Travel Time</p>
-                <p className="text-xs font-bold text-amber-400 mt-0.5">{selectedRoute.duration}</p>
+              <div className="rounded-xl bg-slate-800/40 p-2 border border-slate-800/60">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Distance</span>
+                <span className="text-sm font-extrabold text-white mt-0.5 block">{activeRoute.distance || '2.5 km'}</span>
               </div>
-
-              {/* Arrival Time */}
-              <div className="bg-slate-950/50 p-2 rounded-xl border border-slate-800/60">
-                <p className="text-[9px] font-semibold text-slate-400 uppercase">Arrival</p>
-                <p className="text-xs font-bold text-emerald-400 mt-0.5">{selectedRoute.eta}</p>
+              <div className="rounded-xl bg-slate-800/40 p-2 border border-slate-800/60">
+                <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Arrival Time</span>
+                <span className="text-sm font-extrabold text-emerald-400 mt-0.5 block">{activeRoute.arrivalTime || '11:50 AM'}</span>
               </div>
             </div>
           </div>
         )}
+
       </div>
+
     </div>
   );
 }
