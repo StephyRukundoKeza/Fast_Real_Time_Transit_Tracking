@@ -1,6 +1,55 @@
 // src/pages/Buses.jsx
 import React, { useState } from 'react';
 
+// Sample Operators
+const OPERATORS = [
+  {
+    id: 'volcano',
+    name: 'Volcano Express',
+    code: 'VOL',
+    color: 'from-amber-500 to-orange-600',
+    activeBuses: 12,
+    routesCount: 'Kigali ➔ Huye / Musanze',
+    tag: 'Popular'
+  },
+  {
+    id: 'virunga',
+    name: 'Virunga Express',
+    code: 'VIR',
+    color: 'from-emerald-500 to-teal-700',
+    activeBuses: 8,
+    routesCount: 'Kigali ➔ Rubavu / Musanze',
+    tag: 'Express'
+  },
+  {
+    id: 'shalom',
+    name: 'Shalom Express',
+    code: 'SHA',
+    color: 'from-blue-600 to-indigo-800',
+    activeBuses: 6,
+    routesCount: 'Kigali ➔ Muhanga / Karongi',
+    tag: 'Regional'
+  },
+  {
+    id: 'rftc',
+    name: 'RFTC',
+    code: 'RFTC',
+    color: 'from-cyan-500 to-blue-600',
+    activeBuses: 24,
+    routesCount: 'Kigali City Routes',
+    tag: 'City Transport'
+  },
+  {
+    id: 'rtco',
+    name: 'RTCO',
+    code: 'RTCO',
+    color: 'from-purple-600 to-slate-900',
+    activeBuses: 15,
+    routesCount: 'Inter-Province Express',
+    tag: 'Long Distance'
+  }
+];
+
 const SEAT_LAYOUT = [
   ...Array.from({ length: 8 }, (_, i) => {
     const rowNum = i + 1;
@@ -27,7 +76,7 @@ const SEAT_LAYOUT = [
 ];
 
 function SeatSelectionModal({ bus, onClose }) {
-  const [step, setStep] = useState('select'); // 'select' | 'payment'
+  const [step, setStep] = useState('select');
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('');
   const [selectedBank, setSelectedBank] = useState('Bank of Kigali');
@@ -47,8 +96,6 @@ function SeatSelectionModal({ bus, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
       <div className="relative w-full max-w-[360px] overflow-hidden rounded-[40px] border-[8px] border-slate-950 bg-[#f4f7fc] shadow-2xl">
-        
-        {/* Dark Blue Header */}
         <div className="bg-[#0e1b42] px-5 pt-8 pb-5 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -83,7 +130,6 @@ function SeatSelectionModal({ bus, onClose }) {
           </div>
         </div>
 
-        {/* STEP 1: SEAT SELECTION */}
         {step === 'select' && (
           <div className="p-4">
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
@@ -93,7 +139,6 @@ function SeatSelectionModal({ bus, onClose }) {
                 </div>
               </div>
 
-              {/* Column Headers A B ... C */}
               <div className="mb-2 grid grid-cols-[20px_1fr_16px_1fr] items-center text-center text-[10px] font-semibold text-slate-400">
                 <span />
                 <div className="grid grid-cols-2 gap-2">
@@ -106,7 +151,6 @@ function SeatSelectionModal({ bus, onClose }) {
                 </div>
               </div>
 
-              {/* Seat Grid */}
               <div className="space-y-2 text-center text-[11px] font-medium">
                 {SEAT_LAYOUT.map((row) => (
                   <div key={row.row} className="grid grid-cols-[20px_1fr_16px_1fr] items-center">
@@ -150,7 +194,6 @@ function SeatSelectionModal({ bus, onClose }) {
 
               <hr className="my-4 border-slate-100" />
 
-              {/* Legend */}
               <div className="flex items-center justify-center gap-4 text-[10px] text-slate-500">
                 <div className="flex items-center gap-1.5">
                   <span className="h-3.5 w-3.5 rounded border border-amber-500 bg-amber-50" />
@@ -167,7 +210,6 @@ function SeatSelectionModal({ bus, onClose }) {
               </div>
             </div>
 
-            {/* Buy Ticket Button */}
             <button
               disabled={selectedSeats.length === 0}
               onClick={() => setStep('payment')}
@@ -178,13 +220,11 @@ function SeatSelectionModal({ bus, onClose }) {
           </div>
         )}
 
-        {/* STEP 2: PAYMENT CARD */}
         {step === 'payment' && (
           <div className="p-4 space-y-3">
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm space-y-3">
               <h2 className="text-xs font-bold text-slate-800">Select Payment Option</h2>
 
-              {/* Mobile Money Options */}
               <button
                 onClick={() => setPaymentMethod('momo')}
                 className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
@@ -219,7 +259,6 @@ function SeatSelectionModal({ bus, onClose }) {
                 <span className="text-[10px] text-slate-400">Mobile</span>
               </button>
 
-              {/* Apple Pay */}
               <button
                 onClick={() => setPaymentMethod('apple')}
                 className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ${
@@ -235,7 +274,6 @@ function SeatSelectionModal({ bus, onClose }) {
                 <span className="text-[10px] text-slate-400">Digital Wallet</span>
               </button>
 
-              {/* Bank Transfer with Dropdown */}
               <div
                 className={`rounded-xl border transition-all ${
                   paymentMethod === 'bank'
@@ -273,7 +311,6 @@ function SeatSelectionModal({ bus, onClose }) {
               </div>
             </div>
 
-            {/* Confirm Payment Button */}
             <button
               disabled={!paymentMethod}
               onClick={() => {
@@ -330,7 +367,9 @@ function SeatButton({ seat, isSelected, onClick }) {
 const INITIAL_BUSES = [
   {
     id: 'RAC 245B',
-    routeCode: 'Route R2',
+    operatorId: 'volcano',
+    operatorName: 'Volcano Express',
+    routeCode: 'Route V1',
     routeName: 'Kimisagara ➔ Downtown',
     status: 'active',
     statusTag: 'On Time',
@@ -342,7 +381,9 @@ const INITIAL_BUSES = [
   },
   {
     id: 'RTA 318C',
-    routeCode: 'Route R3',
+    operatorId: 'virunga',
+    operatorName: 'Virunga Express',
+    routeCode: 'Route V2',
     routeName: 'Remera ➔ Nyabugogo',
     status: 'active',
     statusTag: 'Delayed',
@@ -354,6 +395,8 @@ const INITIAL_BUSES = [
   },
   {
     id: 'KBC 102A',
+    operatorId: 'rftc',
+    operatorName: 'RFTC',
     routeCode: 'Route R1',
     routeName: 'Nyabugogo ➔ Kimironko',
     status: 'active',
@@ -366,7 +409,9 @@ const INITIAL_BUSES = [
   },
   {
     id: 'RAD 512D',
-    routeCode: 'Route R4',
+    operatorId: 'shalom',
+    operatorName: 'Shalom Express',
+    routeCode: 'Route S1',
     routeName: 'Nyamirambo ➔ City Center',
     status: 'active',
     statusTag: 'On Time',
@@ -379,6 +424,7 @@ const INITIAL_BUSES = [
 ];
 
 export default function Buses() {
+  const [selectedOperator, setSelectedOperator] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedBusForModal, setSelectedBusForModal] = useState(null);
@@ -386,6 +432,8 @@ export default function Buses() {
   const filterTabs = ['All', 'On Time', 'Delayed', 'Arriving Soon'];
 
   const filteredBuses = INITIAL_BUSES.filter((bus) => {
+    const matchesOperator = selectedOperator ? bus.operatorId === selectedOperator.id : true;
+
     const matchesSearch =
       bus.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       bus.routeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -395,126 +443,187 @@ export default function Buses() {
     const matchesFilter =
       activeFilter === 'All' || bus.statusTag.toLowerCase() === activeFilter.toLowerCase();
 
-    return matchesSearch && matchesFilter;
+    return matchesOperator && matchesSearch && matchesFilter;
   });
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 p-4 md:p-6 font-sans">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-white tracking-wide">Bus Directory</h1>
-        <p className="text-xs text-slate-400 mt-1">Find active buses and select available seats</p>
-      </div>
+      
+      {/* SCREEN 1: SELECT TRANSPORT OPERATOR */}
+      {!selectedOperator ? (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-wide">Transport Agencies</h1>
+            <p className="text-xs text-slate-400 mt-1">Select a bus company to view available routes and fleet</p>
+          </div>
 
-      <div className="relative mb-4">
-        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by route, stop, or bus ID..."
-          className="w-full bg-slate-900/90 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-8 py-3 outline-none focus:border-cyan-500/60 transition-all shadow-md"
-        />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
-          >
-            ✕
-          </button>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 no-scrollbar">
-        {filterTabs.map((tab) => {
-          const isActive = activeFilter === tab;
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveFilter(tab)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-                isActive
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
-                  : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'
-              }`}
-            >
-              {tab}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="space-y-4">
-        {filteredBuses.length > 0 ? (
-          filteredBuses.map((bus) => {
-            const openCount = bus.totalSeats - bus.occupiedSeats.length;
-            return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {OPERATORS.map((company) => (
               <div
-                key={bus.id}
-                className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-4 hover:border-slate-700/60 transition-all"
+                key={company.id}
+                onClick={() => setSelectedOperator(company)}
+                className="group relative cursor-pointer overflow-hidden rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl hover:border-slate-700 transition-all duration-300 active:scale-[0.99]"
               >
-                <div className="flex items-start justify-between border-b border-slate-800/80 pb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono font-bold bg-slate-800 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
-                        {bus.id}
-                      </span>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${bus.statusColor}`}>
-                        {bus.statusTag}
-                      </span>
+                <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${company.color}`} />
+                
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800 font-black text-white text-sm border border-slate-700 shadow-inner">
+                      {company.code}
                     </div>
-                    <h3 className="text-sm font-bold text-white mt-1">
-                      <span className="text-slate-400 mr-1.5">{bus.routeCode}:</span>
-                      {bus.routeName}
-                    </h3>
+                    <div>
+                      <h2 className="text-base font-bold text-white group-hover:text-cyan-400 transition-colors">
+                        {company.name}
+                      </h2>
+                      <p className="text-[11px] text-slate-400">{company.routesCount}</p>
+                    </div>
                   </div>
-
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                    {bus.status}
+                  <span className="text-[9px] font-semibold bg-slate-800 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-full">
+                    {company.tag}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center py-1">
-                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
-                    <p className="text-[9px] font-semibold text-slate-400 uppercase">Next Stop</p>
-                    <p className="text-xs font-bold text-slate-200 mt-0.5 truncate">{bus.nextStop}</p>
-                  </div>
-
-                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
-                    <p className="text-[9px] font-semibold text-slate-400 uppercase">ETA</p>
-                    <p className="text-xs font-bold text-cyan-400 mt-0.5">{bus.eta}</p>
-                  </div>
-
-                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
-                    <p className="text-[9px] font-semibold text-slate-400 uppercase">Open Seats</p>
-                    <p className="text-xs font-bold text-emerald-400 mt-0.5">
-                      {openCount} <span className="text-[9px] text-slate-500">/ {bus.totalSeats}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setSelectedBusForModal(bus)}
-                    className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/10 active:scale-[0.99]"
-                  >
-                    <span>💺</span>
-                    <span>Select Seats</span>
-                  </button>
-
-                  <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold py-2.5 px-3.5 rounded-xl border border-slate-700/60 transition-all active:scale-[0.99]">
-                    <span>🚌 Track</span>
-                  </button>
+                <div className="mt-4 flex items-center justify-between border-t border-slate-800/80 pt-3 text-xs">
+                  <span className="text-slate-400 text-[11px]">Active Fleet:</span>
+                  <span className="font-bold text-emerald-400">{company.activeBuses} Buses Active ➔</span>
                 </div>
               </div>
-            );
-          })
-        ) : (
-          <div className="text-center py-12 text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800/50">
-            <span className="text-3xl block mb-2">🚌</span>
-            <p className="text-xs font-medium">No buses found matching your search</p>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        /* SCREEN 2: BUS DIRECTORY FOR SELECTED OPERATOR */
+        <div>
+          <div className="flex items-center gap-3 mb-6">
+            <button
+              onClick={() => setSelectedOperator(null)}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-all active:scale-95"
+            >
+              ←
+            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-white tracking-wide">{selectedOperator.name}</h1>
+                <span className="text-[10px] bg-slate-800 text-cyan-400 px-2 py-0.5 rounded font-mono border border-slate-700">
+                  {selectedOperator.code}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">Select an active bus to pick your seats</p>
+            </div>
+          </div>
+
+          <div className="relative mb-4">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={`Search ${selectedOperator.name} buses...`}
+              className="w-full bg-slate-900/90 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 rounded-xl pl-10 pr-8 py-3 outline-none focus:border-cyan-500/60 transition-all shadow-md"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1 no-scrollbar">
+            {filterTabs.map((tab) => {
+              const isActive = activeFilter === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveFilter(tab)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
+                    isActive
+                      ? 'bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-500/20'
+                      : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  {tab}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="space-y-4">
+            {filteredBuses.length > 0 ? (
+              filteredBuses.map((bus) => {
+                const openCount = bus.totalSeats - bus.occupiedSeats.length;
+                return (
+                  <div
+                    key={bus.id}
+                    className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-4 hover:border-slate-700/60 transition-all"
+                  >
+                    <div className="flex items-start justify-between border-b border-slate-800/80 pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-bold bg-slate-800 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20">
+                            {bus.id}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${bus.statusColor}`}>
+                            {bus.statusTag}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-bold text-white mt-1">
+                          <span className="text-slate-400 mr-1.5">{bus.routeCode}:</span>
+                          {bus.routeName}
+                        </h3>
+                      </div>
+
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                        {bus.status}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center py-1">
+                      <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase">Next Stop</p>
+                        <p className="text-xs font-bold text-slate-200 mt-0.5 truncate">{bus.nextStop}</p>
+                      </div>
+
+                      <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase">ETA</p>
+                        <p className="text-xs font-bold text-cyan-400 mt-0.5">{bus.eta}</p>
+                      </div>
+
+                      <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800/60">
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase">Open Seats</p>
+                        <p className="text-xs font-bold text-emerald-400 mt-0.5">
+                          {openCount} <span className="text-[9px] text-slate-500">/ {bus.totalSeats}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => setSelectedBusForModal(bus)}
+                        className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold py-2.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/10 active:scale-[0.99]"
+                      >
+                        <span>💺</span>
+                        <span>Select Seats</span>
+                      </button>
+
+                      <button className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold py-2.5 px-3.5 rounded-xl border border-slate-700/60 transition-all active:scale-[0.99]">
+                        <span>🚌 Track</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-12 text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800/50">
+                <span className="text-3xl block mb-2">🚌</span>
+                <p className="text-xs font-medium">No buses found for this operator</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {selectedBusForModal && (
         <SeatSelectionModal 
