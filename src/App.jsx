@@ -47,6 +47,22 @@ function App() {
         setStep("logged_in");
       }
     });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          setStep("phone");
+        } else if (session?.user) {
+          setUser(session.user);
+          setStep("logged_in");
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, [isSupabaseConfigured]);
 
   const handleSendOtp = async (e) => {
@@ -96,6 +112,15 @@ function App() {
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setStep("phone");
+    setPhone("+250");
+    setToken("");
+    setMessage("");
+  };
+
   if (step === "phone") {
     return (
       <PhoneLogin
@@ -142,7 +167,10 @@ function App() {
 
           <Route path="/history" element={<History />} />
 
-          <Route path="/profile" element={<Profile user={user} />} />
+          <Route
+            path="/profile"
+            element={<Profile user={user} onLogout={handleLogout} />}
+          />
 
           <Route
             path="*"

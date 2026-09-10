@@ -3,7 +3,7 @@ import Card from "../components/Card";
 import Button from "../components/Button";
 import Input from "../components/Input";
 
-function Profile() {
+function Profile({ user, onLogout }) {
   const [notifications, setNotifications] = useState(true);
   const [editing, setEditing] = useState(false);
 
@@ -28,8 +28,10 @@ function Profile() {
   };
 
   const handleLogout = () => {
-    alert("Logout will be connected to authentication later.");
-  };
+  if (onLogout) {
+    onLogout();
+  }
+};
 
   return (
     <div className="min-h-screen bg-[#071426] px-5 py-6 text-white">
