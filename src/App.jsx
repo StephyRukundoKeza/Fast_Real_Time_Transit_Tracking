@@ -160,8 +160,7 @@ function App() {
 
           <Route path="/search" element={<Search />} />
 
-          <Route path="/buses" element={<Buses />} />
-<Route path="/seats/:busId" element={<SeatSelection />} />
+          <Route path="/buses" element={<Buses />} /><Route path="/seats/:busId" element={<SeatSelection user={user} />} />
 
           <Route path="/payment" element={<Payment />} />
 
