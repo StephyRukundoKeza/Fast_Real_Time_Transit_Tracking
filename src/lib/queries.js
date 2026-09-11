@@ -16,3 +16,13 @@ export async function getBuses() {
   if (error) throw error
   return data
 }
+
+export async function getSeats(tripId) {
+  const { data, error } = await supabase
+    .from('seats')
+    .select('*')
+    .eq('trip_id', tripId)
+    .order('seat_number', { ascending: true })
+  if (error) throw error
+  return data
+}
