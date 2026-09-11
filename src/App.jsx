@@ -12,6 +12,7 @@ import BottomNav from "./components/BottomNav";
 
 import PhoneLogin from "./pages/PhoneLogin";
 import OtpVerification from "./pages/OtpVerification";
+import SeatSelection from "./pages/SeatSelection";
 
 // Temporary placeholder components for payment & confirmation routes
 function Payment() {
@@ -160,6 +161,7 @@ function App() {
           <Route path="/search" element={<Search />} />
 
           <Route path="/buses" element={<Buses />} />
+<Route path="/seats/:busId" element={<SeatSelection />} />
 
           <Route path="/payment" element={<Payment />} />
 

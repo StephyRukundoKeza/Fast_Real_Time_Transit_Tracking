@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 import Card from "../components/Card";
 import Input from "../components/Input";
 import Button from "../components/Button";
@@ -10,6 +11,7 @@ function Buses() {
   const [buses, setBuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   const filters = ["All", "On Time", "Delayed", "Arriving Soon"];
 
@@ -170,6 +172,13 @@ function Buses() {
               >
                 Track Bus
               </Button>
+	      <Button
+  size="small"
+  className="mt-2"
+  onClick={() => navigate(`/seats/${bus.id}`, { state: { routeName: bus.route } })}
+>
+  Select Seats
+</Button>
             </Card>
           ))
         ) : (

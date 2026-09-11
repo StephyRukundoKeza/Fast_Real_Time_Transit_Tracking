@@ -1,32 +1,108 @@
 import { useState } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import Card from "../components/Card";
 import Button from "../components/Button";
 
-function SeatSelection({ busId = "BUS-101", routeName = "Route 101: Kimironko ‚ûî Nyabugogo", onBack, onConfirm }) {
-  // 1 = Occupied, 0 = Available
-  const initialSeats = [
-    { id: "1A", status: 1 }, { id: "1B", status: 0 }, { id: "1C", status: 0 }, { id: "1D", status: 1 },
-    { id: "2A", status: 0 }, { id: "2B", status: 0 }, { id: "2C", status: 1 }, { id: "2D", status: 0 },
-    { id: "3A", status: 1 }, { id: "3B", status: 1 }, { id: "3C", status: 0 }, { id: "3D", status: 0 },
-    { id: "4A", status: 0 }, { id: "4B", status: 0 }, { id: "4C", status: 0 }, { id: "4D", status: 1 },
-    { id: "5A", status: 0 }, { id: "5B", status: 1 }, { id: "5C", status: 0 }, { id: "5D", status: 0 },
-  ];
+// Coaster-style minibus layout: 2 seats | aisle | 3 seats per row,
+// with a 5-seat bench across the very back row (no aisle there).
+const SEAT_ROWS = [
+  { left: 2, right: 3 },
+  { left: 2, right: 3 },
+  { left: 2, right: 3 },
+  { left: 2, right: 3 },
+  { left: 2, right: 3 },
+  { left: 2, right: 3 },
+  { bench: 5 },
+];
 
-  const [selectedSeat, setSelectedSeat] = useState(null);
+const MAX_SEATS = 4;
+
+// Placeholder occupied seats until real trip data is wired in.
+const OCCUPIED_SEAT_IDS = ["1B", "2C", "3A", "3E", "4B", "5D", "6A", "7C"];
+
+function buildSeats() {
+  const letters = ["A", "B", "C", "D", "E"];
+  const seats = [];
+
+  SEAT_ROWS.forEach((row, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    const count = row.bench ?? row.left + row.right;
+
+    for (let i = 0; i < count; i++) {
+      const id = `${rowNumber}${letters[i]}`;
+      seats.push({
+        id,
+        row: rowNumber,
+        side: row.bench ? "bench" : i < row.left ? "left" : "right",
+        status: OCCUPIED_SEAT_IDS.includes(id) ? 1 : 0, // 1 = Occupied, 0 = Available
+      });
+    }
+  });
+
+  return seats;
+}
+
+const initialSeats = buildSeats();
+
+function SeatSelection() {
+  const { busId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const routeName = location.state?.routeName || "Route details unavailable";
+
+  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [limitMessage, setLimitMessage] = useState("");
 
   const handleSeatClick = (seat) => {
     if (seat.status === 1) return; // Ignore occupied seats
-    setSelectedSeat(seat.id === selectedSeat ? null : seat.id);
+
+    setSelectedSeats((prev) => {
+      if (prev.includes(seat.id)) {
+        setLimitMessage("");
+        return prev.filter((id) => id !== seat.id);
+      }
+
+      if (prev.length >= MAX_SEATS) {
+        setLimitMessage(`You can only select up to ${MAX_SEATS} seats.`);
+        return prev;
+      }
+
+      setLimitMessage("");
+      return [...prev, seat.id];
+    });
+  };
+
+  const renderSeat = (seat) => {
+    const isOccupied = seat.status === 1;
+    const isSelected = selectedSeats.includes(seat.id);
+
+    return (
+      <button
+        key={seat.id}
+        type="button"
+        disabled={isOccupied}
+        onClick={() => handleSeatClick(seat)}
+        className={`h-10 w-10 rounded-lg font-bold text-[11px] transition flex items-center justify-center ${
+          isOccupied
+            ? "bg-white/5 text-white/20 cursor-not-allowed border border-transparent"
+            : isSelected
+            ? "bg-[#20d9c2] text-[#071426] shadow-lg shadow-[#20d9c2]/20"
+            : "bg-[#071426] text-white border border-white/15 hover:border-[#20d9c2]"
+        }`}
+      >
+        {seat.id}
+      </button>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-[#071426] px-5 py-6 text-white pb-28">
+        <div className="min-h-screen bg-[#071426] px-5 py-6 text-white pb-44">
       {/* Top Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
           <button
             type="button"
-            onClick={onBack}
+            onClick={() => navigate(-1)}
             className="text-xs font-medium text-[#20d9c2] hover:underline"
           >
             ‚Üê Back to Buses
@@ -37,7 +113,7 @@ function SeatSelection({ busId = "BUS-101", routeName = "Route 101: Kimironko ‚û
       </div>
 
       {/* Seat Legend */}
-      <Card className="mb-6 flex items-center justify-around py-3">
+      <Card className="mb-3 flex items-center justify-around py-3">
         <div className="flex items-center space-x-2">
           <div className="h-4 w-4 rounded bg-[#10243c] border border-white/20" />
           <span className="text-xs text-white/70">Available</span>
@@ -52,59 +128,70 @@ function SeatSelection({ busId = "BUS-101", routeName = "Route 101: Kimironko ‚û
         </div>
       </Card>
 
+      {/* Selection limit note / warning */}
+      <p className="mb-4 text-center text-[11px] text-white/40">
+        {limitMessage || `Choose up to ${MAX_SEATS} seats.`}
+      </p>
+
       {/* Bus Seat Layout Container */}
       <Card className="p-6 max-w-xs mx-auto border-white/10">
-        <div className="text-center text-xs text-white/40 mb-6 uppercase tracking-wider font-semibold">
+        <div className="text-center text-xs text-white/40 mb-2 uppercase tracking-wider font-semibold">
           Front / Driver Side
         </div>
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/15" />
 
-        {/* 2 x 2 Seat Grid */}
-        <div className="grid grid-cols-4 gap-3">
-          {initialSeats.map((seat, index) => {
-            const isOccupied = seat.status === 1;
-            const isSelected = selectedSeat === seat.id;
+        <div className="space-y-2.5">
+          {SEAT_ROWS.map((rowConfig, rowIndex) => {
+            const rowNumber = rowIndex + 1;
+            const rowSeats = initialSeats.filter((s) => s.row === rowNumber);
+
+            if (rowConfig.bench) {
+              return (
+                <div key={rowNumber} className="flex items-center justify-center gap-2">
+                  {rowSeats.map(renderSeat)}
+                </div>
+              );
+            }
+
+            const leftSeats = rowSeats.filter((s) => s.side === "left");
+            const rightSeats = rowSeats.filter((s) => s.side === "right");
 
             return (
-              <div
-                key={seat.id}
-                className={`${(index + 1) % 2 === 0 && (index + 1) % 4 !== 0 ? "mr-4" : ""}`}
-              >
-                <button
-                  type="button"
-                  disabled={isOccupied}
-                  onClick={() => handleSeatClick(seat)}
-                  className={`w-full py-3 rounded-xl font-bold text-xs transition flex items-center justify-center ${
-                    isOccupied
-                      ? "bg-white/5 text-white/20 cursor-not-allowed border border-transparent"
-                      : isSelected
-                      ? "bg-[#20d9c2] text-[#071426] shadow-lg shadow-[#20d9c2]/20"
-                      : "bg-[#071426] text-white border border-white/15 hover:border-[#20d9c2]"
-                  }`}
-                >
-                  {seat.id}
-                </button>
+              <div key={rowNumber} className="flex items-center justify-center gap-2">
+                <div className="flex gap-2">{leftSeats.map(renderSeat)}</div>
+                <div className="w-5" aria-hidden="true" />
+                <div className="flex gap-2">{rightSeats.map(renderSeat)}</div>
               </div>
             );
           })}
         </div>
+
+        <div className="mt-4 text-center text-[10px] text-white/30 uppercase tracking-wider">
+          Rear Bench
+        </div>
       </Card>
 
       {/* Floating Bottom Confirm Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#10243c] border-t border-white/10 p-4">
+            <div className="fixed bottom-[70px] left-0 right-0 z-30 bg-[#10243c] border-t border-white/10 p-4 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div>
-            <p className="text-xs text-white/50">Selected Seat</p>
+            <p className="text-xs text-white/50">
+              Selected Seats ({selectedSeats.length}/{MAX_SEATS})
+            </p>
             <p className="text-lg font-bold text-[#20d9c2]">
-              {selectedSeat ? selectedSeat : "None"}
+              {selectedSeats.length > 0 ? selectedSeats.join(", ") : "None"}
             </p>
           </div>
 
           <Button
-            disabled={!selectedSeat}
-            onClick={() => onConfirm && onConfirm(selectedSeat)}
+            disabled={selectedSeats.length === 0}
+            onClick={() =>
+              selectedSeats.length > 0 &&
+              navigate("/confirm", { state: { busId, seatIds: selectedSeats } })
+            }
             className="w-auto px-6"
           >
-            Confirm Seat
+            Confirm {selectedSeats.length > 1 ? `${selectedSeats.length} Seats` : "Seat"}
           </Button>
         </div>
       </div>
