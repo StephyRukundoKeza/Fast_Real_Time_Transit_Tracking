@@ -188,7 +188,7 @@ function SeatSelection({ user }) {
     });
   };
 
-  const handleConfirmBooking = async () => {
+  const handleConfirmBooking = () => {
     if (selectedSeatIds.length === 0 || !trip) return;
 
     if (!user) {
@@ -196,30 +196,17 @@ function SeatSelection({ user }) {
       return;
     }
 
-    setBookingInProgress(true);
-    setBookingMessage("");
+    const chosenSeats = seats.filter((s) => selectedSeatIds.includes(s.id));
 
-    const rows = selectedSeatIds.map((seatId) => ({
-      trip_id: trip.id,
-      seat_id: seatId,
-      passenger_id: user.id,
-    }));
-
-    const { error } = await supabase.from("bookings").insert(rows);
-    setBookingInProgress(false);
-
-    if (error) {
-      if (error.code === "23505") {
-        setBookingMessage("One of those seats was just booked by someone else — please pick again.");
-        setSelectedSeatIds([]);
-        refetchSeats(trip.id);
-      } else {
-        setBookingMessage(`Booking failed: ${error.message}`);
-      }
-      return;
-    }
-
-    navigate("/confirm", { state: { busId, tripId: trip.id, seatIds: selectedSeatIds } });
+    navigate("/payment", {
+      state: {
+        busId,
+        tripId: trip.id,
+        routeName,
+        departureTime: trip.departure_time,
+        seats: chosenSeats.map((s) => ({ id: s.id, seat_number: s.seat_number })),
+      },
+    });
   };
 
   const renderSeat = (seat) => {

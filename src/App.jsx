@@ -13,15 +13,8 @@ import BottomNav from "./components/BottomNav";
 import PhoneLogin from "./pages/PhoneLogin";
 import OtpVerification from "./pages/OtpVerification";
 import SeatSelection from "./pages/SeatSelection";
-
-// Temporary placeholder components for payment & confirmation routes
-function Payment() {
-  return <div className="p-4 text-center">Payment Screen Placeholder</div>;
-}
-
-function Confirm() {
-  return <div className="p-4 text-center">Booking Confirmation Screen Placeholder</div>;
-}
+import Payment from "./pages/Payment";
+import Confirm from "./pages/Confirm";
 
 function App() {
   const isSupabaseConfigured = Boolean(
@@ -162,11 +155,11 @@ function App() {
 
           <Route path="/buses" element={<Buses />} /><Route path="/seats/:busId" element={<SeatSelection user={user} />} />
 
-          <Route path="/payment" element={<Payment />} />
+          <Route path="/payment" element={<Payment user={user} />} />
 
           <Route path="/confirm" element={<Confirm />} />
 
-          <Route path="/history" element={<History />} />
+          <Route path="/history" element={<History user={user} />} />
 
           <Route
             path="/profile"
