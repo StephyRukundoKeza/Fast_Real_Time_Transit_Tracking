@@ -1,119 +1,181 @@
-import { useState, useEffect } from 'react'
-import { supabase } from './supabaseClient'
-import './App.css'
+import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { supabase } from "./supabaseClient";
+import "./App.css";
+
+import NavigatePage from "./pages/Navigate";
+import Buses from "./pages/Buses";
+import History from "./pages/History";
+import Profile from "./pages/Profile";
+import Search from "./pages/Search";
+import BottomNav from "./components/BottomNav";
+
+import PhoneLogin from "./pages/PhoneLogin";
+import OtpVerification from "./pages/OtpVerification";
+import SeatSelection from "./pages/SeatSelection";
+import Payment from "./pages/Payment";
+import Confirm from "./pages/Confirm";
 
 function App() {
-  const [phone, setPhone] = useState('+1234567890') // your test number
-  const [token, setToken] = useState('')
-  const [step, setStep] = useState('phone') // 'phone' | 'otp' | 'logged_in'
-  const [user, setUser] = useState(null)
-  const [message, setMessage] = useState('')
+  const isSupabaseConfigured = Boolean(
+    import.meta.env.VITE_SUPABASE_URL &&
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+  );
+
+  const [phone, setPhone] = useState("+250");
+  const [token, setToken] = useState("");
+  const [step, setStep] = useState(
+    isSupabaseConfigured ? "phone" : "logged_in"
+  );
+  const [user, setUser] = useState(null);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
-    // Check if user is already logged in
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        setUser(user)
-        setStep('logged_in')
+        setUser(user);
+        setStep("logged_in");
       }
-    })
-  }, [])
+    });
 
-  // 1. Send OTP (Simulated for test numbers!)
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          setStep("phone");
+        } else if (session?.user) {
+          setUser(session.user);
+          setStep("logged_in");
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [isSupabaseConfigured]);
+
   const handleSendOtp = async (e) => {
-    e.preventDefault()
-    setMessage('Sending code...')
-    const { error } = await supabase.auth.signInWithOtp({ phone })
+    e.preventDefault();
+
+    if (!phone || phone.length < 10) {
+      setMessage("Please enter a valid phone number.");
+      return;
+    }
+
+    setMessage("Sending code...");
+
+    const { error } = await supabase.auth.signInWithOtp({
+      phone,
+    });
 
     if (error) {
-      setMessage(`❌ Error: ${error.message}`)
+      setMessage(`Error: ${error.message}`);
     } else {
-      setMessage('✅ Code sent! Enter your test OTP.')
-      setStep('otp')
+      setMessage("Code sent!");
+      setStep("otp");
     }
-  }
+  };
 
-  // 2. Verify OTP
   const handleVerifyOtp = async (e) => {
-    e.preventDefault()
-    setMessage('Verifying code...')
+    e.preventDefault();
+
+    if (token.length !== 6) {
+      setMessage("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setMessage("Verifying code...");
+
     const { data, error } = await supabase.auth.verifyOtp({
       phone,
       token,
-      type: 'sms',
-    })
+      type: "sms",
+    });
 
     if (error) {
-      setMessage(`❌ Verification failed: ${error.message}`)
+      setMessage(`Verification failed: ${error.message}`);
     } else {
-      setUser(data.user)
-      setStep('logged_in')
-      setMessage('🎉 Successfully logged in!')
+      setUser(data.user);
+      setStep("logged_in");
+      setMessage("");
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setStep("phone");
+    setPhone("+250");
+    setToken("");
+    setMessage("");
+  };
+
+  if (step === "phone") {
+    return (
+      <PhoneLogin
+        phone={phone}
+        setPhone={setPhone}
+        onSubmit={handleSendOtp}
+        message={message}
+      />
+    );
   }
 
-  // 3. Logout
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setStep('phone')
-    setToken('')
-    setMessage('Logged out.')
+  if (step === "otp") {
+    return (
+      <OtpVerification
+        phone={phone}
+        token={token}
+        setToken={setToken}
+        onSubmit={handleVerifyOtp}
+        onBack={() => {
+          setStep("phone");
+          setToken("");
+          setMessage("");
+        }}
+        message={message}
+      />
+    );
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: '50px auto', padding: 24, border: '1px solid #333', borderRadius: 12, textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h2>🚌 Transit Tracker Auth</h2>
+    <BrowserRouter>
+      <div className="min-h-screen bg-gray-50 pb-24">
+        <Routes>
+          <Route path="/" element={<Navigate to="/navigate" replace />} />
 
-      {message && <p style={{ fontSize: 14, color: '#4ade80' }}>{message}</p>}
+          <Route path="/navigate" element={<NavigatePage />} />
 
-      {step === 'phone' && (
-        <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ textAlign: 'left', fontSize: 12 }}>Phone Number:</label>
-          <input
-            type="text"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+1234567890"
-            style={{ padding: 10, borderRadius: 6, border: '1px solid #555' }}
-            required
+          <Route path="/search" element={<Search />} />
+
+          <Route path="/buses" element={<Buses />} /><Route path="/seats/:busId" element={<SeatSelection user={user} />} />
+
+          <Route path="/payment" element={<Payment user={user} />} />
+
+          <Route path="/confirm" element={<Confirm />} />
+
+          <Route path="/history" element={<History user={user} />} />
+
+          <Route
+            path="/profile"
+            element={<Profile user={user} onLogout={handleLogout} />}
           />
-          <button type="submit" style={{ padding: 10, borderRadius: 6, background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer' }}>
-            Send OTP Code
-          </button>
-        </form>
-      )}
 
-      {step === 'otp' && (
-        <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ textAlign: 'left', fontSize: 12 }}>Enter OTP Code (e.g. 123456):</label>
-          <input
-            type="text"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="123456"
-            style={{ padding: 10, borderRadius: 6, border: '1px solid #555' }}
-            required
+          <Route
+            path="*"
+            element={<Navigate to="/navigate" replace />}
           />
-          <button type="submit" style={{ padding: 10, borderRadius: 6, background: '#16a34a', color: '#fff', border: 'none', cursor: 'pointer' }}>
-            Verify & Log In
-          </button>
-        </form>
-      )}
+        </Routes>
 
-      {step === 'logged_in' && (
-        <div>
-          <p>Logged in as:</p>
-          <code style={{ background: '#222', padding: 6, borderRadius: 4, display: 'block', wordBreak: 'break-all' }}>
-            {user?.phone || user?.id}
-          </code>
-          <button onClick={handleLogout} style={{ marginTop: 16, padding: 8, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-            Sign Out
-          </button>
-        </div>
-      )}
-    </div>
-  )
+        <BottomNav />
+      </div>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
