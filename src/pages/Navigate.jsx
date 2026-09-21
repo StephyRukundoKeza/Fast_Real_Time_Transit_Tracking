@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { supabase } from '../supabaseClient';
 
 // Fix Leaflet's default marker icon path issue in React environments
 delete L.Icon.Default.prototype._getIconUrl;
@@ -28,6 +29,18 @@ const createCustomIcon = (emoji, bgColor) => L.divIcon({
 
 const userIcon = createCustomIcon('📍', '#10b981');
 const destinationIcon = createCustomIcon('🎯', '#e11d48');
+const busIcon = createCustomIcon('🚌', '#0284c7');
+
+// Helper component to fix tile rendering glitch on load
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+  }, [map]);
+  return null;
+}
 
 // Helper component to smoothly pan the Leaflet camera from user location to destination and back
 function MapCameraController({ focus, destinationCoords, userCoords }) {
@@ -106,6 +119,48 @@ export default function Navigate() {
   const [isFocused, setIsFocused] = useState(false);
   const [activeRoute, setActiveRoute] = useState(null);
   const [cameraFocus, setCameraFocus] = useState('user');
+  const [busLocation, setBusLocation] = useState(null);
+
+  useEffect(() => {
+    // 1. Fetch latest initial bus location using lat / lng columns
+    const fetchInitialBusLocation = async () => {
+      const { data, error } = await supabase
+        .from('bus_locations')
+        .select('lat, lng')
+        .order('id', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data && data.lat !== undefined && data.lng !== undefined) {
+        setBusLocation([data.lat, data.lng]);
+      }
+    };
+
+    fetchInitialBusLocation();
+
+    // 2. Subscribe to Realtime updates on lat / lng columns
+    const channel = supabase
+      .channel('bus-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'bus_locations',
+        },
+        (payload) => {
+          const newRow = payload.new;
+          if (newRow && newRow.lat !== undefined && newRow.lng !== undefined) {
+            setBusLocation([newRow.lat, newRow.lng]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const triggerCameraAnimation = () => {
     setCameraFocus('destination');
@@ -171,6 +226,7 @@ export default function Navigate() {
         zoomControl={false}
         className="absolute inset-0 h-full w-full z-0"
       >
+        <MapResizer />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -180,6 +236,13 @@ export default function Navigate() {
         <Marker position={USER_LOCATION} icon={userIcon}>
           <Popup>You are here</Popup>
         </Marker>
+
+        {/* REALTIME BUS MARKER */}
+        {busLocation && (
+          <Marker position={busLocation} icon={busIcon}>
+            <Popup>Live Bus Position</Popup>
+          </Marker>
+        )}
 
         {/* DESTINATION MARKER */}
         {activeRoute && activeRoute.latlng && (
