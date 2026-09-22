@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./supabaseClient";
 import "./App.css";
 
+
 import NavigatePage from "./pages/Navigate";
 import Buses from "./pages/Buses";
 import History from "./pages/History";
@@ -15,6 +16,7 @@ import OtpVerification from "./pages/OtpVerification";
 import SeatSelection from "./pages/SeatSelection";
 import Payment from "./pages/Payment";
 import Confirm from "./pages/Confirm";
+import { isValidRwandaPhone } from "./utils/validation";
 
 function App() {
   const isSupabaseConfigured = Boolean(
@@ -62,8 +64,8 @@ function App() {
   const handleSendOtp = async (e) => {
     e.preventDefault();
 
-    if (!phone || phone.length < 10) {
-      setMessage("Please enter a valid phone number.");
+    if (!isValidRwandaPhone(phone)) {
+      setMessage("Enter a valid Rwanda phone number (e.g. +250791234567).");
       return;
     }
 

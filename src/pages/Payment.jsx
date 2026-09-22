@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import { initiatePayment, pollUntilFinal } from "../lib/payments/paymentService";
 import Card from "../components/Card";
 import Button from "../components/Button";
+import { isValidRwandaPhone, isValidPaymentAmount, isValidSeatSelection, MAX_SEATS_PER_TRIP } from "../utils/validation";
 
 function formatTripTime(iso) {
   if (!iso) return "";
@@ -76,16 +77,20 @@ function Payment({ user }) {
   const amount = farePerSeat != null ? farePerSeat * seats.length : null;
 
   const handlePay = async () => {
-    if (!phoneNumber || phoneNumber.replace(/\s/g, "").length < 10) {
-      setErrorMessage("Enter a valid mobile money phone number.");
+    if (!isValidRwandaPhone(phoneNumber)) {
+      setErrorMessage("Enter a valid Rwanda mobile money number (e.g. +250788123456).");
       return;
     }
     if (!user) {
       setErrorMessage("Please log in to pay.");
       return;
     }
-    if (amount == null) {
+    if (!isValidPaymentAmount(amount)) {
       setErrorMessage("Fare isn't available for this route yet.");
+      return;
+    }
+    if (!isValidSeatSelection(seats.length, MAX_SEATS_PER_TRIP)) {
+      setErrorMessage(`You can only book between 1 and ${MAX_SEATS_PER_TRIP} seats at a time.`);
       return;
     }
 

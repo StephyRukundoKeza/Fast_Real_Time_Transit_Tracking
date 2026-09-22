@@ -3,8 +3,9 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import Card from "../components/Card";
 import Button from "../components/Button";
+import { MAX_SEATS_PER_TRIP, isValidSeatSelection } from "../utils/validation";
 
-const MAX_SEATS = 4;
+const MAX_SEATS = MAX_SEATS_PER_TRIP;
 
 function layoutSeats(seats) {
   const rows = [];
@@ -190,6 +191,11 @@ function SeatSelection({ user }) {
 
   const handleConfirmBooking = () => {
     if (selectedSeatIds.length === 0 || !trip) return;
+
+    if (!isValidSeatSelection(selectedSeatIds.length)) {
+      setBookingMessage(`Select between 1 and ${MAX_SEATS} seats.`);
+      return;
+    }
 
     if (!user) {
       setBookingMessage("Please log in to confirm a booking.");
