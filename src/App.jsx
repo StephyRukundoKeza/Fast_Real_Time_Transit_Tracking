@@ -12,7 +12,6 @@ import BottomNav from "./components/BottomNav";
 
 import PhoneLogin from "./pages/PhoneLogin";
 import OtpVerification from "./pages/OtpVerification";
-import SeatSelection from "./pages/SeatSelection";
 import Payment from "./pages/Payment";
 import Confirm from "./pages/Confirm";
 
@@ -153,7 +152,7 @@ function App() {
 
           <Route path="/search" element={<Search />} />
 
-          <Route path="/buses" element={<Buses />} /><Route path="/seats/:busId" element={<SeatSelection user={user} />} />
+          <Route path="/buses" element={<Buses />} />
 
           <Route path="/payment" element={<Payment user={user} />} />
 

@@ -28,10 +28,10 @@ function Profile({ user, onLogout }) {
   };
 
   const handleLogout = () => {
-  if (onLogout) {
-    onLogout();
-  }
-};
+    if (onLogout) {
+      onLogout();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#071426] px-5 py-6 text-white">
