@@ -8,11 +8,6 @@ function BottomNav() {
       icon: "🧭",
     },
     {
-      name: "Search",
-      path: "/search",
-      icon: "🔎",
-    },
-    {
       name: "Buses",
       path: "/buses",
       icon: "🚌",

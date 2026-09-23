@@ -16,17 +16,29 @@ function formatTripTime(iso) {
   });
 }
 
-function Payment({ user }) {
+const BANK_OPTIONS = [
+  "Bank of Kigali (BK)",
+  "I&M Bank Rwanda",
+  "Equity Bank Rwanda",
+  "Cogebanque",
+  "Access Bank",
+  "Ecobank Rwanda",
+  "Unguka Bank",
+];
+
+export default function Payment({ user }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { busId, tripId, routeName, departureTime, seats } = location.state || {};
 
+  const [paymentMethod, setPaymentMethod] = useState("momo"); // momo | airtel | bank | applepay
   const [phoneNumber, setPhoneNumber] = useState("+250");
+  const [selectedBank, setSelectedBank] = useState(BANK_OPTIONS[0]);
+  const [accountNumber, setAccountNumber] = useState("");
+  
   const [status, setStatus] = useState("idle"); // idle | processing | failed
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Real fare comes from routes.fare_rwf (set via a researched estimate based
-  // on real 2026 Kigali distance-based fare reporting — see tracker note).
   const [farePerSeat, setFarePerSeat] = useState(null);
   const [fareLoading, setFareLoading] = useState(true);
   const [fareError, setFareError] = useState("");
@@ -76,8 +88,12 @@ function Payment({ user }) {
   const amount = farePerSeat != null ? farePerSeat * seats.length : null;
 
   const handlePay = async () => {
-    if (!phoneNumber || phoneNumber.replace(/\s/g, "").length < 10) {
-      setErrorMessage("Enter a valid mobile money phone number.");
+    if ((paymentMethod === "momo" || paymentMethod === "airtel") && (!phoneNumber || phoneNumber.replace(/\s/g, "").length < 10)) {
+      setErrorMessage("Enter a valid mobile phone number.");
+      return;
+    }
+    if (paymentMethod === "bank" && !accountNumber) {
+      setErrorMessage("Enter your bank account number.");
       return;
     }
     if (!user) {
@@ -96,7 +112,9 @@ function Payment({ user }) {
 
     try {
       const initiated = await initiatePayment({
-        phoneNumber,
+        phoneNumber: paymentMethod === "momo" || paymentMethod === "airtel" ? phoneNumber : accountNumber,
+        paymentMethod,
+        bankName: paymentMethod === "bank" ? selectedBank : undefined,
         amount,
         currency: "RWF",
         email: user.email || "",
@@ -117,7 +135,6 @@ function Payment({ user }) {
         return;
       }
 
-      // Payment succeeded — only now do we actually book the seats.
       const rows = seats.map((seat) => ({
         trip_id: tripId,
         seat_id: seat.id,
@@ -141,6 +158,12 @@ function Payment({ user }) {
         return;
       }
 
+      const seatIds = seats.map((s) => s.id);
+      await supabase
+        .from("seats")
+        .update({ status: "booked" })
+        .in("id", seatIds);
+
       navigate("/confirm", {
         state: {
           busId,
@@ -159,7 +182,7 @@ function Payment({ user }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#071426] px-5 py-6 text-white pb-24">
+    <div className="min-h-screen bg-[#071426] px-5 py-6 text-white pb-24 font-sans">
       <button
         type="button"
         onClick={() => navigate(-1)}
@@ -173,10 +196,11 @@ function Payment({ user }) {
         {routeName} ({busId}){departureTime ? ` · Departs ${formatTripTime(departureTime)}` : ""}
       </p>
 
-      <Card className="p-5 max-w-sm mx-auto mb-4">
+      {/* Booking Summary Card */}
+      <Card className="p-5 max-w-sm mx-auto mb-4 bg-[#0d1d2d] border border-slate-800 rounded-2xl">
         <p className="text-xs text-white/50 mb-1">Seats</p>
-        <p className="mb-3 text-sm font-semibold">
-          {seats.map((s) => s.seat_number).join(", ")}
+        <p className="mb-3 text-sm font-semibold text-white">
+          {seats.map((s) => s.seat_number || s).join(", ")}
         </p>
 
         <p className="text-xs text-white/50 mb-1">Amount due</p>
@@ -189,16 +213,115 @@ function Payment({ user }) {
         )}
       </Card>
 
-      <Card className="p-5 max-w-sm mx-auto">
-        <label className="mb-1 block text-xs text-white/50">Mobile Money Number</label>
-        <input
-          type="tel"
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-          disabled={status === "processing"}
-          className="mb-4 w-full rounded-lg border border-white/15 bg-[#071426] px-3 py-2 text-sm text-white focus:border-[#20d9c2] focus:outline-none"
-          placeholder="+2507XXXXXXXX"
-        />
+      {/* Payment Selector Card */}
+      <Card className="p-5 max-w-sm mx-auto bg-[#0d1d2d] border border-slate-800 rounded-2xl">
+        <label className="mb-2 block text-xs font-semibold text-white/70">Select Payment Method</label>
+        
+        {/* Payment Type Grid */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("momo")}
+            className={`p-2.5 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all ${
+              paymentMethod === "momo"
+                ? "bg-[#20d9c2]/10 border-[#20d9c2] text-[#20d9c2]"
+                : "bg-[#071426] border-white/10 text-white/70 hover:border-white/30"
+            }`}
+          >
+            <span>🟡</span> MTN MoMo
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("airtel")}
+            className={`p-2.5 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all ${
+              paymentMethod === "airtel"
+                ? "bg-[#20d9c2]/10 border-[#20d9c2] text-[#20d9c2]"
+                : "bg-[#071426] border-white/10 text-white/70 hover:border-white/30"
+            }`}
+          >
+            <span>🔴</span> Airtel Money
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("bank")}
+            className={`p-2.5 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all ${
+              paymentMethod === "bank"
+                ? "bg-[#20d9c2]/10 border-[#20d9c2] text-[#20d9c2]"
+                : "bg-[#071426] border-white/10 text-white/70 hover:border-white/30"
+            }`}
+          >
+            <span>🏦</span> Bank Transfer
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPaymentMethod("applepay")}
+            className={`p-2.5 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all ${
+              paymentMethod === "applepay"
+                ? "bg-[#20d9c2]/10 border-[#20d9c2] text-[#20d9c2]"
+                : "bg-[#071426] border-white/10 text-white/70 hover:border-white/30"
+            }`}
+          >
+            <span>🍏</span> Apple Pay
+          </button>
+        </div>
+
+        {/* Dynamic Inputs Based on Selection */}
+        {(paymentMethod === "momo" || paymentMethod === "airtel") && (
+          <div>
+            <label className="mb-1 block text-xs text-white/50">
+              {paymentMethod === "momo" ? "MTN MoMo Number" : "Airtel Money Number"}
+            </label>
+            <input
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              disabled={status === "processing"}
+              className="mb-4 w-full rounded-lg border border-white/15 bg-[#071426] px-3 py-2 text-sm text-white focus:border-[#20d9c2] focus:outline-none"
+              placeholder="+2507XXXXXXXX"
+            />
+          </div>
+        )}
+
+        {paymentMethod === "bank" && (
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="mb-1 block text-xs text-white/50">Select Bank</label>
+              <select
+                value={selectedBank}
+                onChange={(e) => setSelectedBank(e.target.value)}
+                disabled={status === "processing"}
+                className="w-full rounded-lg border border-white/15 bg-[#071426] px-3 py-2 text-sm text-white focus:border-[#20d9c2] focus:outline-none"
+              >
+                {BANK_OPTIONS.map((bank) => (
+                  <option key={bank} value={bank} className="bg-[#071426] text-white">
+                    {bank}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-white/50">Account Number</label>
+              <input
+                type="text"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                disabled={status === "processing"}
+                className="w-full rounded-lg border border-white/15 bg-[#071426] px-3 py-2 text-sm text-white focus:border-[#20d9c2] focus:outline-none"
+                placeholder="00010-XXXXXX-XX"
+              />
+            </div>
+          </div>
+        )}
+
+        {paymentMethod === "applepay" && (
+          <div className="p-3 bg-[#071426] rounded-xl border border-white/10 text-center mb-4 text-xs text-white/70">
+            Apple Pay will confirm authorization using Touch ID / Face ID on submission.
+          </div>
+        )}
 
         {errorMessage && <p className="mb-3 text-xs text-red-400">{errorMessage}</p>}
 
@@ -215,11 +338,9 @@ function Payment({ user }) {
         </Button>
 
         <p className="mt-3 text-center text-[10px] text-white/30">
-          Test mode: a phone number ending in 0000 simulates a declined payment.
+          Test mode: numbers ending in 0000 simulate a declined transaction.
         </p>
       </Card>
     </div>
   );
 }
-
-export default Payment;

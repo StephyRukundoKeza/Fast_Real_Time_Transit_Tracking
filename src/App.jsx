@@ -7,7 +7,6 @@ import NavigatePage from "./pages/Navigate";
 import Buses from "./pages/Buses";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
-import Search from "./pages/Search";
 import BottomNav from "./components/BottomNav";
 
 import PhoneLogin from "./pages/PhoneLogin";
@@ -149,8 +148,6 @@ function App() {
           <Route path="/" element={<Navigate to="/navigate" replace />} />
 
           <Route path="/navigate" element={<NavigatePage />} />
-
-          <Route path="/search" element={<Search />} />
 
           <Route path="/buses" element={<Buses />} />
 
