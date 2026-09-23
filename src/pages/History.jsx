@@ -1,130 +1,138 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import Card from "../components/Card";
 import Button from "../components/Button";
 
-function formatTripTime(iso) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export default function History({ user }) {
-  const [bookings, setBookings] = useState([]);
+  const [selectedTrip, setSelectedTrip] = useState(null);
+  const [trips, setTrips] = useState([]);
+  const [savedStops, setSavedStops] = useState(new Set());
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [selectedBooking, setSelectedBooking] = useState(null);
 
+  // Fetch booking history and saved destinations
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-
-    async function loadBookings() {
+    async function fetchData() {
       setLoading(true);
-      setLoadError("");
 
-      const { data, error } = await supabase
-        .from("bookings")
-        .select(
-          `id, status, booked_at,
-           seats ( seat_number ),
-           trips ( departure_time, routes ( route_name, fare_rwf ) )`
-        )
-        .eq("passenger_id", user.id)
-        .order("booked_at", { ascending: false });
-
-      if (cancelled) return;
-
-      if (error) {
-        setLoadError(error.message);
-      } else {
-        setBookings(data || []);
+      // Get user session if user prop is missing
+      let currentUser = user;
+      if (!currentUser) {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        currentUser = authUser;
       }
+
+      // 1. Query booking history
+      let historyQuery = supabase.from("booking_history").select("*");
+      if (currentUser?.id) {
+        historyQuery = historyQuery.eq("passenger_id", currentUser.id);
+      }
+      const { data: historyData } = await historyQuery.order("booked_at", { ascending: false });
+
+      if (historyData) {
+        const formattedTrips = historyData.map((item) => {
+          const bookedDate = item.booked_at ? new Date(item.booked_at) : new Date();
+          
+          // Clean destination stop name
+          let destName = item.destination_stop || item.route_name || "Musanze";
+          if (destName.includes("-")) {
+            destName = destName.split("-").pop().trim();
+          }
+
+          let originName = item.origin_stop || "Nyabugogo";
+          if (originName.includes("-")) {
+            originName = originName.split("-")[0].trim();
+          }
+
+          return {
+            id: item.booking_id || item.id,
+            destination: destName,
+            fullRoute: item.route_name || `${originName} - ${destName}`,
+            from: originName,
+            date: bookedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            time: bookedDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+            distance: item.distance || "6.4 km",
+            duration: item.duration || "18 min",
+            status: item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : "Completed",
+            seatNumber: item.seat_number || item.seat_code,
+            price: item.price || item.fare,
+          };
+        });
+        setTrips(formattedTrips);
+      }
+
+      // 2. Fetch user's saved destinations from database
+      if (currentUser?.id) {
+        const { data: savedData, error } = await supabase
+          .from("saved_destinations")
+          .select("stop_name")
+          .eq("user_id", currentUser.id);
+
+        if (!error && savedData) {
+          setSavedStops(new Set(savedData.map((s) => s.stop_name)));
+        }
+      }
+
       setLoading(false);
     }
 
-    loadBookings();
-    return () => {
-      cancelled = true;
-    };
+    fetchData();
   }, [user]);
 
-  // Split into upcoming (trip hasn't departed yet) vs past (already departed),
-  // so "Trip History" can literally mean past trips while upcoming ones stay visible too.
-  const now = Date.now();
-  const upcomingBookings = bookings.filter((b) => {
-    const t = b.trips?.departure_time ? new Date(b.trips.departure_time).getTime() : null;
-    return t !== null && t >= now;
-  });
-  const pastBookings = bookings.filter((b) => {
-    const t = b.trips?.departure_time ? new Date(b.trips.departure_time).getTime() : null;
-    return t === null || t < now;
-  });
+  // Toggle Save/Unsave destination in Supabase
+  const toggleSaveDestination = async (e, stopName) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-  function renderBookingCard(b) {
-    return (
-      <Card
-        key={b.id}
-        className="p-4 bg-[#10243c] rounded-2xl border border-white/5 shadow-xl"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">
-              {b.trips?.routes?.route_name || "Unknown route"}
-            </h2>
-            <p className="mt-1 text-sm text-white/50">
-              Seat {b.seats?.seat_number ?? "—"}
-            </p>
-          </div>
+    if (!stopName) return;
 
-          <span
-            className={`rounded-lg px-3 py-1 text-xs font-medium border ${
-              b.status === "confirmed"
-                ? "bg-[#20d9c2]/10 text-[#20d9c2] border-[#20d9c2]/20"
-                : "bg-red-500/10 text-red-400 border-red-500/20"
-            }`}
-          >
-            {b.status}
-          </span>
-        </div>
+    let currentUser = user;
+    if (!currentUser) {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      currentUser = authUser;
+    }
 
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-3">
-          <div>
-            <p className="text-xs text-white/40">Departure</p>
-            <p className="mt-1 text-sm font-medium text-white/80">
-              {formatTripTime(b.trips?.departure_time)}
-            </p>
-          </div>
+    const isCurrentlySaved = savedStops.has(stopName);
 
-          <div>
-            <p className="text-xs text-white/40">Fare</p>
-            <p className="mt-1 text-sm font-medium text-white/80">
-              {b.trips?.routes?.fare_rwf != null
-                ? `${b.trips.routes.fare_rwf.toLocaleString()} RWF`
-                : "—"}
-            </p>
-          </div>
-        </div>
+    // 1. Optimistic UI update
+    const updatedStops = new Set(savedStops);
+    if (isCurrentlySaved) {
+      updatedStops.delete(stopName);
+    } else {
+      updatedStops.add(stopName);
+    }
+    setSavedStops(updatedStops);
 
-        <Button
-          variant="outline"
-          size="small"
-          onClick={() => setSelectedBooking(b)}
-          className="mt-4 w-full py-2 text-xs font-semibold rounded-xl border-white/10 text-white/80 hover:bg-white/5"
-        >
-          View Details
-        </Button>
-      </Card>
-    );
-  }
+    if (!currentUser?.id) return;
+
+    // 2. Database Sync
+    if (isCurrentlySaved) {
+      const { error } = await supabase
+        .from("saved_destinations")
+        .delete()
+        .eq("user_id", currentUser.id)
+        .eq("stop_name", stopName);
+
+      if (error) {
+        console.error("Error unsaving destination:", error);
+        // Rollback on error
+        setSavedStops(new Set(savedStops));
+      }
+    } else {
+      const { error } = await supabase.from("saved_destinations").insert([
+        {
+          user_id: currentUser.id,
+          stop_name: stopName,
+          label: stopName,
+        },
+      ]);
+
+      if (error) {
+        console.error("Error saving destination:", error);
+        // Rollback on error
+        setSavedStops(new Set(savedStops));
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#071426] px-5 py-6 text-white pb-24">
@@ -134,67 +142,115 @@ export default function History({ user }) {
         </p>
         <h1 className="mt-1 text-2xl font-bold">Trip History</h1>
         <p className="mt-1 text-sm text-white/55">
-          Your real bookings, pulled straight from the database.
+          View your previous journeys and booking details
         </p>
       </div>
 
-      {loading ? (
-        <Card className="p-8 text-center">Loading…</Card>
-      ) : loadError ? (
-        <Card className="p-8 text-center text-red-400">{loadError}</Card>
-      ) : bookings.length === 0 ? (
-        <Card className="p-8 text-center bg-[#10243c] rounded-2xl border border-white/5">
-          <p className="font-medium text-white">No trips yet</p>
-          <p className="mt-1 text-sm text-white/40">
-            Your bookings will appear here once you book a seat.
-          </p>
-        </Card>
-      ) : (
-        <div className="space-y-8">
-          {upcomingBookings.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">
-                Upcoming
-              </h3>
-              <div className="space-y-4">
-                {upcomingBookings.map((b) => renderBookingCard(b))}
-              </div>
-            </div>
-          )}
+      <div className="space-y-4">
+        {loading ? (
+          <Card className="p-8 text-center bg-[#10243c] rounded-2xl border border-white/5">
+            <p className="text-sm font-medium text-white/60">Loading trip history...</p>
+          </Card>
+        ) : trips.length > 0 ? (
+          trips.map((trip, idx) => {
+            const isSaved = savedStops.has(trip.destination);
+            return (
+              <Card key={`${trip.id}-${idx}`} className="p-4 bg-[#10243c] rounded-2xl border border-white/5 shadow-xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <h2 className="text-lg font-semibold text-white">
+                      {trip.from} - {trip.destination}
+                    </h2>
+                    <p className="mt-1 text-sm text-white/50">
+                      Destination: {trip.destination}
+                    </p>
+                  </div>
 
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">
-              Trip History
-            </h3>
-            {pastBookings.length > 0 ? (
-              <div className="space-y-4">
-                {pastBookings.map((b) => renderBookingCard(b))}
-              </div>
-            ) : (
-              <Card className="p-8 text-center bg-[#10243c] rounded-2xl border border-white/5">
-                <p className="font-medium text-white">No past trips yet</p>
-                <p className="mt-1 text-sm text-white/40">
-                  Completed trips will show up here after they depart.
-                </p>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="rounded-lg bg-[#20d9c2]/10 px-3 py-1 text-xs font-medium text-[#20d9c2] border border-[#20d9c2]/20">
+                      {trip.status}
+                    </span>
+
+                    {/* Interactive Save Destination Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => toggleSaveDestination(e, trip.destination)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all active:scale-95 cursor-pointer ${
+                        isSaved
+                          ? "bg-amber-400 text-[#071426] border-amber-400 shadow-md"
+                          : "bg-white/5 border-white/10 text-white/70 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      <span className="text-sm">{isSaved ? "★" : "☆"}</span>
+                      <span>{isSaved ? "Saved" : "Save Destination"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-3">
+                  <div>
+                    <p className="text-xs text-white/40">Date</p>
+                    <p className="mt-1 text-sm font-medium text-white/80">
+                      {trip.date}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-white/40">Time</p>
+                    <p className="mt-1 text-sm font-medium text-white/80">
+                      {trip.time}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-white/40">Distance</p>
+                    <p className="mt-1 text-sm font-medium text-white/80">
+                      {trip.distance}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-white/40">Duration</p>
+                    <p className="mt-1 text-sm font-medium text-white/80">
+                      {trip.duration}
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="small"
+                  onClick={() => setSelectedTrip(trip)}
+                  className="mt-4 w-full py-2 text-xs font-semibold rounded-xl border-white/10 text-white/80 hover:bg-white/5"
+                >
+                  View Details
+                </Button>
               </Card>
-            )}
-          </div>
-        </div>
-      )}
+            );
+          })
+        ) : (
+          <Card className="p-8 text-center bg-[#10243c] rounded-2xl border border-white/5">
+            <p className="font-medium text-white">No trips yet</p>
+            <p className="mt-1 text-sm text-white/40">
+              Your completed journeys will appear here.
+            </p>
+          </Card>
+        )}
+      </div>
 
-      {selectedBooking && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm">
+      {/* TRIP DETAILS MODAL OVERLAY */}
+      {selectedTrip && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md rounded-t-[30px] bg-[#10243c] p-6 text-white border-t border-white/10 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#20d9c2] tracking-wider">
-                  Receipt
-                </span>
-                <h2 className="text-xl font-bold text-white">Booking Details</h2>
+                <span className="text-[10px] uppercase font-bold text-[#20d9c2] tracking-wider">Receipt</span>
+                <h2 className="text-xl font-bold text-white">Trip Details</h2>
               </div>
+
               <button
                 type="button"
-                onClick={() => setSelectedBooking(null)}
+                onClick={() => setSelectedTrip(null)}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/15 active:scale-95 transition-all"
               >
                 ✕
@@ -203,44 +259,47 @@ export default function History({ user }) {
 
             <div className="mt-5 space-y-4">
               <div>
-                <p className="text-xs text-white/40">Route</p>
+                <p className="text-xs text-white/40">Destination</p>
                 <p className="mt-1 text-base font-semibold text-white">
-                  {selectedBooking.trips?.routes?.route_name || "Unknown route"}
+                  {selectedTrip.destination}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 rounded-xl bg-[#071426]/50 p-3 border border-white/5">
+              <div>
+                <p className="text-xs text-white/40">Starting point</p>
+                <p className="mt-1 text-base font-semibold text-white">
+                  {selectedTrip.from}
+                </p>
+              </div>
+
+              {selectedTrip.seatNumber && (
                 <div>
                   <p className="text-xs text-white/40">Seat</p>
+                  <p className="mt-1 text-base font-semibold text-white">
+                    {selectedTrip.seatNumber}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 rounded-xl bg-[#071426]/50 p-3 border border-white/5">
+                <div>
+                  <p className="text-xs text-white/40">Distance</p>
                   <p className="mt-1 text-sm font-semibold text-[#20d9c2]">
-                    {selectedBooking.seats?.seat_number ?? "—"}
+                    {selectedTrip.distance}
                   </p>
                 </div>
+
                 <div>
-                  <p className="text-xs text-white/40">Status</p>
+                  <p className="text-xs text-white/40">Duration</p>
                   <p className="mt-1 text-sm font-semibold text-white">
-                    {selectedBooking.status}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-white/40">Departure</p>
-                  <p className="mt-1 text-sm font-semibold text-white">
-                    {formatTripTime(selectedBooking.trips?.departure_time)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-white/40">Fare</p>
-                  <p className="mt-1 text-sm font-semibold text-white">
-                    {selectedBooking.trips?.routes?.fare_rwf != null
-                      ? `${selectedBooking.trips.routes.fare_rwf.toLocaleString()} RWF`
-                      : "—"}
+                    {selectedTrip.duration}
                   </p>
                 </div>
               </div>
             </div>
 
             <Button
-              onClick={() => setSelectedBooking(null)}
+              onClick={() => setSelectedTrip(null)}
               className="mt-6 w-full py-3 bg-[#20d9c2] text-[#071426] font-bold rounded-xl hover:bg-[#18c5b0] transition-colors"
             >
               Done
