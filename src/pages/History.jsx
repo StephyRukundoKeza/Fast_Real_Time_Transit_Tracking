@@ -34,29 +34,18 @@ export default function History({ user }) {
         const formattedTrips = historyData.map((item) => {
           const bookedDate = item.booked_at ? new Date(item.booked_at) : new Date();
 
-          // Clean destination stop name
-          let destName = item.destination_stop || item.route_name || "Musanze";
-          if (destName.includes("-")) {
-            destName = destName.split("-").pop().trim();
-          }
-
-          let originName = item.origin_stop || "Nyabugogo";
-          if (originName.includes("-")) {
-            originName = originName.split("-")[0].trim();
-          }
-
           return {
             id: item.booking_id || item.id,
-            destination: destName,
-            fullRoute: item.route_name || `${originName} - ${destName}`,
-            from: originName,
+            destination: item.destination || "Unknown",
+            fullRoute: item.route_name || `${item.origin} - ${item.destination}`,
+            from: item.origin || "Unknown",
             date: bookedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
             time: bookedDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
             distance: item.distance || "6.4 km",
             duration: item.duration || "18 min",
             status: item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : "Completed",
             seatNumber: item.seat_number || item.seat_code,
-            price: item.price || item.fare,
+            price: item.price || item.fare_rwf,
             departureTime: item.departure_time || null,
             busId: item.bus_id || null,
           };
@@ -83,7 +72,7 @@ export default function History({ user }) {
   }, [user]);
 
   // Toggle Save/Unsave destination in Supabase
-  
+
   const toggleSaveDestination = async (e, stopName) => {
     e.preventDefault();
     e.stopPropagation();
