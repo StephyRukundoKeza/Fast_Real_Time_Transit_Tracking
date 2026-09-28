@@ -38,8 +38,11 @@ function SeatSelection({ user }) {
   const location = useLocation();
   const navigate = useNavigate();
   const routeName = location.state?.routeName || "Route details unavailable";
+  const passedTripId = location.state?.tripId || null;
 
   const [trip, setTrip] = useState(null);
+  const [realBusId, setRealBusId] = useState(null);
+
   const [tripOptions, setTripOptions] = useState([]);
   const [seats, setSeats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -108,6 +111,30 @@ function SeatSelection({ user }) {
         return;
       }
 
+      setRealBusId(busRow.id);
+
+      // If the caller already picked a specific trip (e.g. from the Buses
+      // list, where a departure time was already chosen), go straight to
+      // it instead of re-deriving "the" upcoming trip from the bus alone.
+      if (passedTripId) {
+        const { data: tripRow, error: tripError } = await supabase
+          .from("trips")
+          .select("id, departure_time")
+          .eq("id", passedTripId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (tripError || !tripRow) {
+          setLoadError("Could not find that trip.");
+          setLoading(false);
+          return;
+        }
+
+        await selectTrip(tripRow);
+        return;
+      }
+
       // Only ever consider trips that haven't already departed
       const { data: upcomingTrips, error: tripsError } = await supabase
         .from("trips")
@@ -143,7 +170,7 @@ function SeatSelection({ user }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busId]);
+    }, [busId, passedTripId]);
 
   useEffect(() => {
     if (!trip?.id) return;
@@ -207,6 +234,7 @@ function SeatSelection({ user }) {
     navigate("/payment", {
       state: {
         busId,
+        realBusId,
         tripId: trip.id,
         routeName,
         departureTime: trip.departure_time,

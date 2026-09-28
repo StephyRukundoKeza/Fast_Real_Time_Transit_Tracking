@@ -14,6 +14,7 @@ import PhoneLogin from "./pages/PhoneLogin";
 import OtpVerification from "./pages/OtpVerification";
 import Payment from "./pages/Payment";
 import Confirm from "./pages/Confirm";
+import SeatSelection from "./pages/SeatSelection";
 import { isValidRwandaPhone } from "./utils/validation";
 
 function App() {
@@ -150,11 +151,12 @@ function App() {
           <Route path="/" element={<Navigate to="/navigate" replace />} />
 
           <Route path="/navigate" element={<NavigatePage user={user} />} />
-          
+
           <Route path="/buses" element={<Buses />} />
 
           <Route path="/payment" element={<Payment user={user} />} />
-
+          <Route path="/seat-selection/:busId" element={<SeatSelection user={user} />} />
+          
           <Route path="/confirm" element={<Confirm />} />
 
           <Route path="/history" element={<History user={user} />} />
