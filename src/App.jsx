@@ -149,8 +149,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/navigate" replace />} />
 
-          <Route path="/navigate" element={<NavigatePage />} />
-
+          <Route path="/navigate" element={<NavigatePage user={user} />} />
+          
           <Route path="/buses" element={<Buses />} />
 
           <Route path="/payment" element={<Payment user={user} />} />

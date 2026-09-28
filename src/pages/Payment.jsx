@@ -30,7 +30,7 @@ const BANK_OPTIONS = [
 export default function Payment({ user }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { busId, tripId, routeName, departureTime, seats } = location.state || {};
+  const { busId, realBusId, tripId, routeName, departureTime, seats } = location.state || {};
 
   const [paymentMethod, setPaymentMethod] = useState("momo"); // momo | airtel | bank | applepay
   const [phoneNumber, setPhoneNumber] = useState("+250");
@@ -172,6 +172,7 @@ export default function Payment({ user }) {
       navigate("/confirm", {
         state: {
           busId,
+          realBusId,
           routeName,
           departureTime,
           seats,

@@ -444,6 +444,7 @@ function SeatSelectionModal({ trip, onClose }) {
       state: {
         tripId: trip.id,
         busId: trip.buses?.plate_number || 'N/A',
+        realBusId: trip.buses?.id || null,
         routeName: trip.routeName,
         departureTime: trip.departure_time,
         seats: selectedSeatObjects,
