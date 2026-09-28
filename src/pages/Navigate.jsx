@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { supabase } from '../supabaseClient';
 
-// Fix Leaflet's default marker icon path issue in React environments
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -12,7 +12,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Custom Leaflet Markers using HTML/SVG divs to match your emerald and rose designs
 const createCustomIcon = (emoji, bgColor) => L.divIcon({
   className: 'custom-leaflet-marker',
   html: `
@@ -28,8 +27,18 @@ const createCustomIcon = (emoji, bgColor) => L.divIcon({
 
 const userIcon = createCustomIcon('📍', '#10b981');
 const destinationIcon = createCustomIcon('🎯', '#e11d48');
+const busIcon = createCustomIcon('🚌', '#0284c7');
 
-// Helper component to smoothly pan the Leaflet camera from user location to destination and back
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+  }, [map]);
+  return null;
+}
+
 function MapCameraController({ focus, destinationCoords, userCoords }) {
   const map = useMap();
 
@@ -56,7 +65,7 @@ const INITIAL_NOTIFICATIONS = [
 
 const POPULAR_PLACES = [
   { 
-    id: 1, 
+    id: 'p1', 
     name: 'Downtown Bus Station', 
     category: 'Transit Station', 
     distance: '1.2 km', 
@@ -66,7 +75,7 @@ const POPULAR_PLACES = [
     latlng: [-1.9441, 30.0619]
   },
   { 
-    id: 2, 
+    id: 'p2', 
     name: 'Kigali Heights Mall', 
     category: 'Shopping Center', 
     distance: '2.5 km', 
@@ -76,7 +85,7 @@ const POPULAR_PLACES = [
     latlng: [-1.9536, 30.0915]
   },
   { 
-    id: 3, 
+    id: 'p3', 
     name: 'Nyabugogo Bus Park', 
     category: 'Major Terminal', 
     distance: '3.8 km', 
@@ -86,7 +95,7 @@ const POPULAR_PLACES = [
     latlng: [-1.9366, 30.0445]
   },
   { 
-    id: 4, 
+    id: 'p4', 
     name: 'Convention Centre', 
     category: 'Landmark', 
     distance: '4.1 km', 
@@ -98,6 +107,8 @@ const POPULAR_PLACES = [
 ];
 
 const USER_LOCATION = [-1.9501, 30.0588];
+// Fallback bus location if database contains no records
+const FALLBACK_BUS_LOCATION = [-1.9460, 30.0620];
 
 export default function Navigate() {
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
@@ -106,6 +117,120 @@ export default function Navigate() {
   const [isFocused, setIsFocused] = useState(false);
   const [activeRoute, setActiveRoute] = useState(null);
   const [cameraFocus, setCameraFocus] = useState('user');
+  const [busLocation, setBusLocation] = useState(FALLBACK_BUS_LOCATION);
+  const [busDetails, setBusDetails] = useState({ plate_number: 'RAC 123 A' });
+  const [dbPlaces, setDbPlaces] = useState([]);
+
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setDbPlaces([]);
+      return;
+    }
+
+    const fetchLocations = async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .ilike('name', `%${searchQuery.trim()}%`)
+        .limit(5);
+
+      if (!error && data && data.length > 0) {
+        const formatted = data.map((loc) => ({
+          id: `db-${loc.id}`,
+          name: loc.name,
+          category: loc.district ? `${loc.district} District` : loc.category || 'Location',
+          distance: loc.is_kigali ? 'Kigali' : loc.province || 'Rwanda',
+          eta: '10 mins',
+          arrivalTime: '11:50 AM',
+          traffic: 'green',
+          latlng: [loc.latitude, loc.longitude],
+        }));
+        setDbPlaces(formatted);
+      } else {
+        setDbPlaces([]);
+      }
+    };
+
+    const timer = setTimeout(fetchLocations, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const fetchInitialBusLocation = async () => {
+      // 1. First attempt query with relational join
+      const { data, error } = await supabase
+        .from('bus_locations')
+        .select(`
+          lat, 
+          lng, 
+          speed,
+          buses (
+            plate_number,
+            model
+          )
+        `)
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("Supabase relation fetch error, falling back to simple query:", error.message);
+        // Fallback simple query without join if foreign key schema fails
+        const { data: simpleData } = await supabase
+          .from('bus_locations')
+          .select('lat, lng')
+          .order('id', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (simpleData && simpleData.lat && simpleData.lng) {
+          setBusLocation([simpleData.lat, simpleData.lng]);
+        }
+        return;
+      }
+
+      if (data && data.lat !== undefined && data.lng !== undefined) {
+        setBusLocation([data.lat, data.lng]);
+        if (data.buses) {
+          setBusDetails(data.buses);
+        }
+      }
+    };
+
+    fetchInitialBusLocation();
+
+    const channel = supabase
+      .channel('bus-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'bus_locations',
+        },
+        async (payload) => {
+          const newRow = payload.new;
+          if (newRow && newRow.lat !== undefined && newRow.lng !== undefined) {
+            setBusLocation([newRow.lat, newRow.lng]);
+
+            if (newRow.bus_id) {
+              const { data: busData } = await supabase
+                .from('buses')
+                .select('plate_number, model')
+                .eq('id', newRow.bus_id)
+                .single();
+
+              if (busData) setBusDetails(busData);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const triggerCameraAnimation = () => {
     setCameraFocus('destination');
@@ -127,7 +252,8 @@ export default function Navigate() {
 
   const handleSearchSubmit = (e) => {
     if (e.key === 'Enter' && searchQuery.trim().length > 0) {
-      const match = POPULAR_PLACES.find(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) || {
+      const allSuggestions = dbPlaces.length > 0 ? dbPlaces : filteredPlaces;
+      const match = allSuggestions.find(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())) || {
         name: searchQuery,
         category: 'Destination',
         distance: '3.0 km',
@@ -153,6 +279,7 @@ export default function Navigate() {
     place.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const displaySuggestions = dbPlaces.length > 0 ? dbPlaces : filteredPlaces;
   const showSuggestions = isFocused && searchQuery.trim().length > 0 && !activeRoute;
 
   const trafficConfig = {
@@ -164,13 +291,13 @@ export default function Navigate() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-slate-900 select-none">
       
-      {/* REAL LEAFLET OPENSTREETMAP CANVAS */}
       <MapContainer 
         center={USER_LOCATION} 
         zoom={14} 
         zoomControl={false}
         className="absolute inset-0 h-full w-full z-0"
       >
+        <MapResizer />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -180,6 +307,15 @@ export default function Navigate() {
         <Marker position={USER_LOCATION} icon={userIcon}>
           <Popup>You are here</Popup>
         </Marker>
+
+        {/* REALTIME BUS MARKER */}
+        {busLocation && (
+          <Marker position={busLocation} icon={busIcon}>
+            <Popup>
+              {busDetails?.plate_number ? `Bus (${busDetails.plate_number})` : 'Live Bus Position'}
+            </Popup>
+          </Marker>
+        )}
 
         {/* DESTINATION MARKER */}
         {activeRoute && activeRoute.latlng && (
@@ -252,13 +388,11 @@ export default function Navigate() {
 
       {/* BOTTOM CONTROL STACK */}
       <div className="absolute bottom-3 left-6 md:left-12 z-40 w-full max-w-md px-4 flex flex-col gap-3 transition-all duration-300">
-        
-        {/* SEARCH INPUT CONTAINER */}
         <div className="relative w-full">
           {showSuggestions && (
             <div className="absolute bottom-full mb-2 left-0 right-0 rounded-2xl border border-slate-800 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl">
-              {filteredPlaces.length > 0 ? (
-                filteredPlaces.map((place) => (
+              {displaySuggestions.length > 0 ? (
+                displaySuggestions.map((place) => (
                   <button
                     key={place.id}
                     onMouseDown={() => handleSelectDestination(place)}
@@ -308,7 +442,6 @@ export default function Navigate() {
           </div>
         </div>
 
-        {/* ACTIVE DESTINATION STATS CARD */}
         {activeRoute && (
           <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-3">

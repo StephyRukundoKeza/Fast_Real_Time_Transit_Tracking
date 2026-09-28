@@ -8,12 +8,10 @@ import NavigatePage from "./pages/Navigate";
 import Buses from "./pages/Buses";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
-import Search from "./pages/Search";
 import BottomNav from "./components/BottomNav";
 
 import PhoneLogin from "./pages/PhoneLogin";
 import OtpVerification from "./pages/OtpVerification";
-import SeatSelection from "./pages/SeatSelection";
 import Payment from "./pages/Payment";
 import Confirm from "./pages/Confirm";
 import { isValidRwandaPhone } from "./utils/validation";
@@ -153,9 +151,7 @@ function App() {
 
           <Route path="/navigate" element={<NavigatePage />} />
 
-          <Route path="/search" element={<Search />} />
-
-          <Route path="/buses" element={<Buses />} /><Route path="/seats/:busId" element={<SeatSelection user={user} />} />
+          <Route path="/buses" element={<Buses />} />
 
           <Route path="/payment" element={<Payment user={user} />} />
 
