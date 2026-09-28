@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { initiatePayment, pollUntilFinal } from "../lib/payments/paymentService";
+import { isValidRwandaPhone, isValidPaymentAmount, isValidSeatSelection, MAX_SEATS_PER_TRIP } from "../utils/validation";
 import Card from "../components/Card";
 import Button from "../components/Button";
-import { isValidRwandaPhone, isValidPaymentAmount, isValidSeatSelection, MAX_SEATS_PER_TRIP } from "../utils/validation";
 
 function formatTripTime(iso) {
   if (!iso) return "";
@@ -36,7 +36,7 @@ export default function Payment({ user }) {
   const [phoneNumber, setPhoneNumber] = useState("+250");
   const [selectedBank, setSelectedBank] = useState(BANK_OPTIONS[0]);
   const [accountNumber, setAccountNumber] = useState("");
-  
+
   const [status, setStatus] = useState("idle"); // idle | processing | failed
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -89,17 +89,12 @@ export default function Payment({ user }) {
   const amount = farePerSeat != null ? farePerSeat * seats.length : null;
 
   const handlePay = async () => {
-<<<<<<< HEAD
-    if (!isValidRwandaPhone(phoneNumber)) {
-      setErrorMessage("Enter a valid Rwanda mobile money number (e.g. +250788123456).");
-=======
-    if ((paymentMethod === "momo" || paymentMethod === "airtel") && (!phoneNumber || phoneNumber.replace(/\s/g, "").length < 10)) {
-      setErrorMessage("Enter a valid mobile phone number.");
+    if ((paymentMethod === "momo" || paymentMethod === "airtel") && !isValidRwandaPhone(phoneNumber)) {
+      setErrorMessage("Enter a valid Rwanda mobile number (e.g. +250788123456).");
       return;
     }
     if (paymentMethod === "bank" && !accountNumber) {
       setErrorMessage("Enter your bank account number.");
->>>>>>> origin/productui
       return;
     }
     if (!user) {
@@ -206,7 +201,6 @@ export default function Payment({ user }) {
         {routeName} ({busId}){departureTime ? ` · Departs ${formatTripTime(departureTime)}` : ""}
       </p>
 
-      {/* Booking Summary Card */}
       <Card className="p-5 max-w-sm mx-auto mb-4 bg-[#0d1d2d] border border-slate-800 rounded-2xl">
         <p className="text-xs text-white/50 mb-1">Seats</p>
         <p className="mb-3 text-sm font-semibold text-white">
@@ -223,11 +217,9 @@ export default function Payment({ user }) {
         )}
       </Card>
 
-      {/* Payment Selector Card */}
       <Card className="p-5 max-w-sm mx-auto bg-[#0d1d2d] border border-slate-800 rounded-2xl">
         <label className="mb-2 block text-xs font-semibold text-white/70">Select Payment Method</label>
-        
-        {/* Payment Type Grid */}
+
         <div className="grid grid-cols-2 gap-2 mb-4">
           <button
             type="button"
@@ -278,7 +270,6 @@ export default function Payment({ user }) {
           </button>
         </div>
 
-        {/* Dynamic Inputs Based on Selection */}
         {(paymentMethod === "momo" || paymentMethod === "airtel") && (
           <div>
             <label className="mb-1 block text-xs text-white/50">
