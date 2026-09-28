@@ -33,23 +33,25 @@ export default function Buses() {
       setLoading(true);
       setErrorMessage('');
 
-      const { data, error } = await supabase
-        .from('trips')
-        .select(`
-          id,
-          departure_time,
-          routes!route_id (
-            id,
-            origin,
-            destination
-          ),
-          buses!bus_id (
-            id,
-            bus_number,
-            plate_number,
-            company_name
-          )
-        `);
+const { data, error } = await supabase
+  .from('trips')
+  .select(`
+    id,
+    departure_time,
+    routes!route_id (
+      id,
+      origin,
+      destination
+    ),
+    buses!bus_id (
+      id,
+      bus_number,
+      plate_number,
+      company_name
+    )
+  `)
+  .gt('departure_time', new Date().toISOString())
+  .order('departure_time', { ascending: true });
 
       if (error) {
         console.error('Supabase query error:', error);
