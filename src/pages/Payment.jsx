@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { initiatePayment, pollUntilFinal } from "../lib/payments/paymentService";
+import { isValidRwandaPhone, isValidPaymentAmount, isValidSeatSelection, MAX_SEATS_PER_TRIP } from "../utils/validation";
 import Card from "../components/Card";
 import Button from "../components/Button";
 
@@ -29,13 +30,13 @@ const BANK_OPTIONS = [
 export default function Payment({ user }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { busId, tripId, routeName, departureTime, seats } = location.state || {};
+  const { busId, realBusId, tripId, routeName, departureTime, seats } = location.state || {};
 
   const [paymentMethod, setPaymentMethod] = useState("momo"); // momo | airtel | bank | applepay
   const [phoneNumber, setPhoneNumber] = useState("+250");
   const [selectedBank, setSelectedBank] = useState(BANK_OPTIONS[0]);
   const [accountNumber, setAccountNumber] = useState("");
-  
+
   const [status, setStatus] = useState("idle"); // idle | processing | failed
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -88,6 +89,11 @@ export default function Payment({ user }) {
   const amount = farePerSeat != null ? farePerSeat * seats.length : null;
 
   const handlePay = async () => {
+ Data/Integration
+    if ((paymentMethod === "momo" || paymentMethod === "airtel") && !isValidRwandaPhone(phoneNumber)) {
+      setErrorMessage("Enter a valid Rwanda mobile number (e.g. +250788123456).");
+      return;
+
     // Input validation checks
     if ((paymentMethod === "momo" || paymentMethod === "airtel")) {
       const cleanPhone = phoneNumber.replace(/\s/g, "");
@@ -95,6 +101,7 @@ export default function Payment({ user }) {
         setErrorMessage("Please enter a valid Rwandan phone number starting with +250 (12 digits).");
         return;
       }
+ productui
     }
 
     if (paymentMethod === "bank" && !accountNumber.trim()) {
@@ -105,10 +112,18 @@ export default function Payment({ user }) {
     if (!user) {
       setErrorMessage("Please log in to pay.");
       return;
-    }
+    } Data/Integration
+    if (!isValidPaymentAmount(amount)) {
+      setErrorMessage("Fare isn't available for this route yet.");
+
 
     if (amount == null || amount <= 0) {
       setErrorMessage("Fare isn't available or invalid for this route.");
+ productui
+      return;
+    }
+    if (!isValidSeatSelection(seats.length, MAX_SEATS_PER_TRIP)) {
+      setErrorMessage(`You can only book between 1 and ${MAX_SEATS_PER_TRIP} seats at a time.`);
       return;
     }
 
@@ -174,6 +189,7 @@ export default function Payment({ user }) {
       navigate("/confirm", {
         state: {
           busId,
+          realBusId,
           routeName,
           departureTime,
           seats,
@@ -203,7 +219,6 @@ export default function Payment({ user }) {
         {routeName} ({busId}){departureTime ? ` · Departs ${formatTripTime(departureTime)}` : ""}
       </p>
 
-      {/* Booking Summary Card */}
       <Card className="p-5 max-w-sm mx-auto mb-4 bg-[#0d1d2d] border border-slate-800 rounded-2xl">
         <p className="text-xs text-white/50 mb-1">Seats</p>
         <p className="mb-3 text-sm font-semibold text-white">
@@ -220,11 +235,9 @@ export default function Payment({ user }) {
         )}
       </Card>
 
-      {/* Payment Selector Card */}
       <Card className="p-5 max-w-sm mx-auto bg-[#0d1d2d] border border-slate-800 rounded-2xl">
         <label className="mb-2 block text-xs font-semibold text-white/70">Select Payment Method</label>
-        
-        {/* Payment Type Grid */}
+
         <div className="grid grid-cols-2 gap-2 mb-4">
           <button
             type="button"
@@ -275,7 +288,6 @@ export default function Payment({ user }) {
           </button>
         </div>
 
-        {/* Dynamic Inputs Based on Selection */}
         {(paymentMethod === "momo" || paymentMethod === "airtel") && (
           <div>
             <label className="mb-1 block text-xs text-white/50">

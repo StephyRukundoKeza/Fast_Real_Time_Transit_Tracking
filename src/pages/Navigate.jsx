@@ -1,6 +1,7 @@
 // src/pages/Navigate.jsx
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useLocation } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { supabase } from '../supabaseClient';
@@ -106,15 +107,46 @@ const POPULAR_PLACES = [
   },
 ];
 
-const USER_LOCATION = [-1.9501, 30.0588];
+// Used only until the browser's real location comes back (or if the user
+// denies/lacks geolocation support), so the map always has something to
+// center on.
+const FALLBACK_USER_LOCATION = [-1.9501, 30.0588];
 // Fallback bus location if database contains no records
 const FALLBACK_BUS_LOCATION = [-1.9460, 30.0620];
 
-export default function Navigate() {
+export default function Navigate({ user }) {
+  const location = useLocation();
+  const passedBusId = location.state?.busId || null;
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [userLocation, setUserLocation] = useState(FALLBACK_USER_LOCATION);
+  const [locationError, setLocationError] = useState('');
+
+  // Track the passenger's real device location instead of a hardcoded
+  // point, so the 📍 marker and map center reflect where they actually are.
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Your browser does not support location tracking.');
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation([position.coords.latitude, position.coords.longitude]);
+        setLocationError('');
+      },
+      (error) => {
+        console.warn('Geolocation error:', error.message);
+        setLocationError('Could not get your location — showing an approximate position instead.');
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
   const [activeRoute, setActiveRoute] = useState(null);
   const [cameraFocus, setCameraFocus] = useState('user');
   const [busLocation, setBusLocation] = useState(FALLBACK_BUS_LOCATION);
@@ -155,82 +187,147 @@ export default function Navigate() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    const fetchInitialBusLocation = async () => {
-      // 1. First attempt query with relational join
-      const { data, error } = await supabase
-        .from('bus_locations')
-        .select(`
-          lat, 
-          lng, 
-          speed,
-          buses (
-            plate_number,
-            model
-          )
-        `)
-        .order('id', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+useEffect(() => {
+  let channel;
+  let trackedBusId = null;
+  let cancelled = false;
 
-      if (error) {
-        console.warn("Supabase relation fetch error, falling back to simple query:", error.message);
-        // Fallback simple query without join if foreign key schema fails
-        const { data: simpleData } = await supabase
-          .from('bus_locations')
-          .select('lat, lng')
-          .order('id', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+  const subscribeToBus = (busId) => {
+    if (channel) supabase.removeChannel(channel);
 
-        if (simpleData && simpleData.lat && simpleData.lng) {
-          setBusLocation([simpleData.lat, simpleData.lng]);
-        }
-        return;
-      }
-
-      if (data && data.lat !== undefined && data.lng !== undefined) {
-        setBusLocation([data.lat, data.lng]);
-        if (data.buses) {
-          setBusDetails(data.buses);
-        }
-      }
-    };
-
-    fetchInitialBusLocation();
-
-    const channel = supabase
-      .channel('bus-realtime')
+    channel = supabase
+      .channel(`bus-realtime-${busId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'bus_locations',
+          filter: `bus_id=eq.${busId}`,
         },
-        async (payload) => {
+        (payload) => {
           const newRow = payload.new;
           if (newRow && newRow.lat !== undefined && newRow.lng !== undefined) {
             setBusLocation([newRow.lat, newRow.lng]);
-
-            if (newRow.bus_id) {
-              const { data: busData } = await supabase
-                .from('buses')
-                .select('plate_number, model')
-                .eq('id', newRow.bus_id)
-                .single();
-
-              if (busData) setBusDetails(busData);
-            }
           }
         }
       )
       .subscribe();
+  };
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  const fetchLatestForBus = async (busId) => {
+    const { data } = await supabase
+      .from('bus_locations')
+      .select('lat, lng')
+      .eq('bus_id', busId)
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data && data.lat !== undefined && data.lng !== undefined) {
+      setBusLocation([data.lat, data.lng]);
+    }
+
+    const { data: busData } = await supabase
+      .from('buses')
+      .select('plate_number, model')
+      .eq('id', busId)
+      .single();
+    if (busData) setBusDetails(busData);
+  };
+
+  const listenForAnyBusUntilOneAppears = () => {
+    channel = supabase
+      .channel('bus-realtime-any')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'bus_locations' },
+        async (payload) => {
+          const newRow = payload.new;
+          if (!newRow || newRow.lat === undefined || newRow.lng === undefined) return;
+
+          trackedBusId = newRow.bus_id;
+          setBusLocation([newRow.lat, newRow.lng]);
+
+          if (newRow.bus_id) {
+            const { data: busData } = await supabase
+              .from('buses')
+              .select('plate_number, model')
+              .eq('id', newRow.bus_id)
+              .single();
+            if (busData) setBusDetails(busData);
+          }
+
+          if (trackedBusId) subscribeToBus(trackedBusId);
+        }
+      )
+      .subscribe();
+  };
+
+  const fetchMostRecentAnyBus = async () => {
+    const { data } = await supabase
+      .from('bus_locations')
+      .select('bus_id, lat, lng, buses ( plate_number, model )')
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data && data.lat !== undefined && data.lng !== undefined) {
+      setBusLocation([data.lat, data.lng]);
+      if (data.buses) setBusDetails(data.buses);
+      trackedBusId = data.bus_id;
+    }
+  };
+
+  const findUsersCurrentBusId = async () => {
+    if (!user?.id) return null;
+
+    const { data } = await supabase
+      .from('booking_history')
+      .select('bus_id, departure_time, arrival_time')
+      .eq('passenger_id', user.id)
+      .order('departure_time', { ascending: true });
+
+    if (!data) return null;
+
+    // Prefer a trip that hasn't clearly finished yet (in progress or
+    // still upcoming), picking the soonest one.
+    const now = Date.now();
+    const current = data.find(
+      (b) => b.bus_id && new Date(b.arrival_time || b.departure_time).getTime() > now - 2 * 60 * 60 * 1000
+    );
+    return current?.bus_id || null;
+  };
+
+  (async () => {
+    if (passedBusId) {
+      // Explicit "Track My Bus" button was used — go straight to that bus.
+      trackedBusId = passedBusId;
+      await fetchLatestForBus(passedBusId);
+    } else {
+      const usersBusId = await findUsersCurrentBusId();
+      if (usersBusId) {
+        trackedBusId = usersBusId;
+        await fetchLatestForBus(usersBusId);
+      } else {
+        await fetchMostRecentAnyBus();
+      }
+    }
+
+    if (cancelled) return;
+
+    if (trackedBusId) {
+      subscribeToBus(trackedBusId);
+    } else {
+      listenForAnyBusUntilOneAppears();
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+    if (channel) supabase.removeChannel(channel);
+  };
+}, [user, passedBusId]);
 
   const triggerCameraAnimation = () => {
     setCameraFocus('destination');
@@ -292,7 +389,7 @@ export default function Navigate() {
     <div className="relative h-screen w-screen overflow-hidden bg-slate-900 select-none">
       
       <MapContainer 
-        center={USER_LOCATION} 
+        center={userLocation} 
         zoom={14} 
         zoomControl={false}
         className="absolute inset-0 h-full w-full z-0"
@@ -304,7 +401,7 @@ export default function Navigate() {
         />
 
         {/* CURRENT USER MARKER */}
-        <Marker position={USER_LOCATION} icon={userIcon}>
+        <Marker position={userLocation} icon={userIcon}>
           <Popup>You are here</Popup>
         </Marker>
 
@@ -327,7 +424,7 @@ export default function Navigate() {
         <MapCameraController 
           focus={cameraFocus} 
           destinationCoords={activeRoute?.latlng} 
-          userCoords={USER_LOCATION} 
+          userCoords={userLocation} 
         />
       </MapContainer>
 
