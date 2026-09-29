@@ -118,12 +118,9 @@ export default function Buses() {
         )}
       </div>
 
-      {/* ========================================================
-          STEP 1: ROUTE SEARCH PAGE
-         ======================================================== */}
+      {/* STEP 1: ROUTE SEARCH PAGE */}
       {step === 1 && (
         <div className="space-y-5 mt-4">
-          {/* Tabs: Within Kigali vs Inter-District */}
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
@@ -154,7 +151,6 @@ export default function Buses() {
             </button>
           </div>
 
-          {/* Plan Your Trip Input Card */}
           <div className="bg-[#0d1d2d] border border-slate-800 rounded-2xl p-4 space-y-3">
             <div className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
               PLAN YOUR TRIP - {tab === 'kigali' ? 'CITY' : 'PROVINCIAL'}
@@ -195,7 +191,6 @@ export default function Buses() {
             </button>
           </div>
 
-          {/* Featured Route Card */}
           <div className="bg-[#0d1d2d] border border-slate-800/80 rounded-2xl p-5 space-y-3">
             <div>
               <h3 className="text-sm font-bold text-white">
@@ -218,9 +213,7 @@ export default function Buses() {
         </div>
       )}
 
-      {/* ========================================================
-          STEP 2: COMPANY SELECTION
-         ======================================================== */}
+      {/* STEP 2: COMPANY SELECTION */}
       {step === 2 && (
         <div className="space-y-4 mt-6">
           <p className="text-xs text-slate-400 mb-2">
@@ -274,9 +267,7 @@ export default function Buses() {
         </div>
       )}
 
-      {/* ========================================================
-          STEP 3: ACTIVE TRIPS VIEW
-         ======================================================== */}
+      {/* STEP 3: ACTIVE TRIPS VIEW */}
       {step === 3 && (
         <div className="space-y-4">
           <input
@@ -384,22 +375,28 @@ function SeatSelectionModal({ trip, onClose }) {
   const [seats, setSeats] = useState([]);
   const [selectedSeatIds, setSelectedSeatIds] = useState([]);
   const [loadingSeats, setLoadingSeats] = useState(true);
+  const [seatError, setSeatError] = useState(null);
+
+  const fetchSeats = async () => {
+    setLoadingSeats(true);
+    setSeatError(null);
+
+    const { data, error } = await supabase
+      .from('seats')
+      .select('*')
+      .eq('trip_id', trip.id)
+      .order('seat_number', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching seats:', error);
+      setSeatError(error.message || 'Failed to load seats. Please try again.');
+    } else {
+      setSeats(data || []);
+    }
+    setLoadingSeats(false);
+  };
 
   useEffect(() => {
-    async function fetchSeats() {
-      setLoadingSeats(true);
-      const { data, error } = await supabase
-        .from('seats')
-        .select('*')
-        .eq('trip_id', trip.id)
-        .order('seat_number', { ascending: true });
-
-      if (!error && data) {
-        setSeats(data);
-      }
-      setLoadingSeats(false);
-    }
-
     fetchSeats();
 
     // Supabase Realtime Subscription for live updates
@@ -497,8 +494,21 @@ function SeatSelectionModal({ trip, onClose }) {
 
           {loadingSeats ? (
             <div className="py-16 text-slate-500 text-xs animate-pulse">Loading bus seat map...</div>
+          ) : seatError ? (
+            <div className="py-10 px-4 text-center">
+              <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/60 rounded-xl p-3 font-mono">
+                {seatError}
+              </p>
+              <button
+                type="button"
+                onClick={fetchSeats}
+                className="mt-3 text-xs text-[#1ed7b5] underline hover:text-white transition-colors font-semibold"
+              >
+                Retry loading seats
+              </button>
+            </div>
           ) : seats.length === 0 ? (
-            <div className="py-16 text-slate-500 text-xs text-center">No seat layout available.</div>
+            <div className="py-16 text-slate-500 text-xs text-center">No seat layout available for this bus.</div>
           ) : (
             <div className="space-y-3 w-full max-w-[280px]">
               {seatRows.map((row, rowIndex) => (

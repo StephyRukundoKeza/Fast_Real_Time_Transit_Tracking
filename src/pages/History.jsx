@@ -7,9 +7,10 @@ export default function History({ user }) {
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [trips, setTrips] = useState([]);
   const [savedStops, setSavedStops] = useState(new Set());
+  const [locationsMap, setLocationsMap] = useState(new Map());
   const [loading, setLoading] = useState(true);
 
-  // Fetch booking history and saved destinations
+  // Fetch booking history, locations, and saved destinations
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -21,7 +22,15 @@ export default function History({ user }) {
         currentUser = authUser;
       }
 
-      // 1. Query booking history
+      // 1. Fetch locations map to translate location_id <-> location_name
+      const { data: locData } = await supabase.from("locations").select("id, name");
+      const locMap = new Map();
+      if (locData) {
+        locData.forEach((loc) => locMap.set(loc.name.toLowerCase(), loc.id));
+        setLocationsMap(locMap);
+      }
+
+      // 2. Query booking history
       let historyQuery = supabase.from("booking_history").select("*");
       if (currentUser?.id) {
         historyQuery = historyQuery.eq("passenger_id", currentUser.id);
@@ -60,15 +69,18 @@ export default function History({ user }) {
         setTrips(formattedTrips);
       }
 
-      // 2. Fetch user's saved destinations from database
+      // 3. Fetch user's saved destinations from database using location_id
       if (currentUser?.id) {
         const { data: savedData, error } = await supabase
           .from("saved_destinations")
-          .select("stop_name")
+          .select("location_id, locations(name)")
           .eq("user_id", currentUser.id);
 
         if (!error && savedData) {
-          setSavedStops(new Set(savedData.map((s) => s.stop_name)));
+          const savedNames = savedData
+            .map((s) => s.locations?.name)
+            .filter(Boolean);
+          setSavedStops(new Set(savedNames));
         }
       }
 
@@ -91,6 +103,7 @@ export default function History({ user }) {
       currentUser = authUser;
     }
 
+    const locationId = locationsMap.get(stopName.toLowerCase());
     const isCurrentlySaved = savedStops.has(stopName);
 
     // 1. Optimistic UI update
@@ -102,15 +115,15 @@ export default function History({ user }) {
     }
     setSavedStops(updatedStops);
 
-    if (!currentUser?.id) return;
+    if (!currentUser?.id || !locationId) return;
 
-    // 2. Database Sync
+    // 2. Database Sync using location_id
     if (isCurrentlySaved) {
       const { error } = await supabase
         .from("saved_destinations")
         .delete()
         .eq("user_id", currentUser.id)
-        .eq("stop_name", stopName);
+        .eq("location_id", locationId);
 
       if (error) {
         console.error("Error unsaving destination:", error);
@@ -121,8 +134,7 @@ export default function History({ user }) {
       const { error } = await supabase.from("saved_destinations").insert([
         {
           user_id: currentUser.id,
-          stop_name: stopName,
-          label: stopName,
+          location_id: locationId,
         },
       ]);
 
