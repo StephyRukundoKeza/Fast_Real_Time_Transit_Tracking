@@ -88,20 +88,27 @@ export default function Payment({ user }) {
   const amount = farePerSeat != null ? farePerSeat * seats.length : null;
 
   const handlePay = async () => {
-    if ((paymentMethod === "momo" || paymentMethod === "airtel") && (!phoneNumber || phoneNumber.replace(/\s/g, "").length < 10)) {
-      setErrorMessage("Enter a valid mobile phone number.");
-      return;
+    // Input validation checks
+    if ((paymentMethod === "momo" || paymentMethod === "airtel")) {
+      const cleanPhone = phoneNumber.replace(/\s/g, "");
+      if (!cleanPhone.startsWith("+250") || cleanPhone.length !== 13) {
+        setErrorMessage("Please enter a valid Rwandan phone number starting with +250 (12 digits).");
+        return;
+      }
     }
-    if (paymentMethod === "bank" && !accountNumber) {
+
+    if (paymentMethod === "bank" && !accountNumber.trim()) {
       setErrorMessage("Enter your bank account number.");
       return;
     }
+
     if (!user) {
       setErrorMessage("Please log in to pay.");
       return;
     }
-    if (amount == null) {
-      setErrorMessage("Fare isn't available for this route yet.");
+
+    if (amount == null || amount <= 0) {
+      setErrorMessage("Fare isn't available or invalid for this route.");
       return;
     }
 
@@ -137,7 +144,7 @@ export default function Payment({ user }) {
 
       const rows = seats.map((seat) => ({
         trip_id: tripId,
-        seat_id: seat.id,
+        seat_id: seat.id || seat,
         passenger_id: user.id,
       }));
 
@@ -158,7 +165,7 @@ export default function Payment({ user }) {
         return;
       }
 
-      const seatIds = seats.map((s) => s.id);
+      const seatIds = seats.map((s) => s.id || s);
       await supabase
         .from("seats")
         .update({ status: "booked" })
