@@ -89,19 +89,12 @@ export default function Payment({ user }) {
   const amount = farePerSeat != null ? farePerSeat * seats.length : null;
 
   const handlePay = async () => {
- Data/Integration
-    if ((paymentMethod === "momo" || paymentMethod === "airtel") && !isValidRwandaPhone(phoneNumber)) {
-      setErrorMessage("Enter a valid Rwanda mobile number (e.g. +250788123456).");
-      return;
-
-    // Input validation checks
-    if ((paymentMethod === "momo" || paymentMethod === "airtel")) {
+    if (paymentMethod === "momo" || paymentMethod === "airtel") {
       const cleanPhone = phoneNumber.replace(/\s/g, "");
-      if (!cleanPhone.startsWith("+250") || cleanPhone.length !== 13) {
-        setErrorMessage("Please enter a valid Rwandan phone number starting with +250 (12 digits).");
+      if (!cleanPhone.startsWith("+250") || cleanPhone.length !== 13 || !isValidRwandaPhone(phoneNumber)) {
+        setErrorMessage("Please enter a valid Rwandan mobile number starting with +250 (12 digits, e.g. +250788123456).");
         return;
       }
- productui
     }
 
     if (paymentMethod === "bank" && !accountNumber.trim()) {
@@ -112,16 +105,13 @@ export default function Payment({ user }) {
     if (!user) {
       setErrorMessage("Please log in to pay.");
       return;
-    } Data/Integration
-    if (!isValidPaymentAmount(amount)) {
-      setErrorMessage("Fare isn't available for this route yet.");
+    }
 
-
-    if (amount == null || amount <= 0) {
+    if (amount == null || amount <= 0 || !isValidPaymentAmount(amount)) {
       setErrorMessage("Fare isn't available or invalid for this route.");
- productui
       return;
     }
+
     if (!isValidSeatSelection(seats.length, MAX_SEATS_PER_TRIP)) {
       setErrorMessage(`You can only book between 1 and ${MAX_SEATS_PER_TRIP} seats at a time.`);
       return;
