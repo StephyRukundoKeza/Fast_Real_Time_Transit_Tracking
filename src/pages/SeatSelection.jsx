@@ -60,7 +60,12 @@ function SeatSelection({ user }) {
       .select("id, seat_number, status")
       .eq("trip_id", tripId)
       .order("seat_number", { ascending: true });
-    if (!error) setSeats(data || []);
+    if (error) {
+      setLoadError("Could not load seats for this trip. Please try again.");
+      return;
+    }
+    setLoadError("");
+    setSeats(data || []);
   }, []);
 
   const selectTrip = useCallback(
@@ -307,6 +312,8 @@ function SeatSelection({ user }) {
             ))}
           </div>
         </Card>
+      ) : seats.length === 0 ? (
+        <Card className="p-8 text-center text-white/50">No seat layout available for this bus.</Card>
       ) : (
         <>
           <Card className="mb-3 flex items-center justify-around py-3">

@@ -3,14 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { MAX_SEATS_PER_TRIP, isValidSeatSelection } from '../utils/validation';
 
-// Rwandan bus companies
-const FEATURED_COMPANIES = [
-  { name: 'Ritco', desc: 'Inter-city & Regional Transport' },
-  { name: 'Volcano', desc: 'Express Kigali routes' },
-  { name: 'Virunga', desc: 'Northern Province & Musanze' },
-  { name: 'Horizon', desc: 'Southern & Western routes' },
-  { name: 'RFTC', desc: 'Local & City coasters' },
-];
+// Cosmetic subtitles only — the list of companies itself comes from the
+// database (see `featuredCompanies` below), not from this map.
+const COMPANY_DESCRIPTIONS = {
+  Ritco: 'Inter-city & Regional Transport',
+  'Volcano Express': 'Express Kigali routes',
+  Virunga: 'Northern Province & Musanze',
+  Horizon: 'Southern & Western routes',
+  RFTC: 'Local & City coasters',
+  'Kigali Bus Services': 'Zone 1 city routes',
+  'Royal Express': 'Zone 2 city routes',
+  'City Express': 'Interdistrict corridors',
+  'Stella Express': 'Interdistrict corridors',
+};
 
 export default function Buses() {
   const navigate = useNavigate();
@@ -64,6 +69,20 @@ const { data, error } = await supabase
 
     fetchBuses();
   }, []);
+
+  // Derive the list of companies to show from the actual trip data,
+  // instead of a hardcoded array that can go stale.
+  const featuredCompanies = useMemo(() => {
+    const names = new Set(
+      buses.map((trip) => trip.buses?.company_name).filter(Boolean)
+    );
+    return Array.from(names)
+      .sort()
+      .map((name) => ({
+        name,
+        desc: COMPANY_DESCRIPTIONS[name] || 'Scheduled routes',
+      }));
+  }, [buses]);
 
   // Filter trips for selected company on Step 3
   const filteredTrips = useMemo(() => {
@@ -232,7 +251,7 @@ const { data, error } = await supabase
           </p>
 
           <div className="grid grid-cols-1 gap-3.5">
-            {FEATURED_COMPANIES.map((company) => {
+            {featuredCompanies.map((company) => {
               const tripCount = buses.filter((t) =>
                 (t.buses?.company_name || '').toLowerCase().includes(company.name.toLowerCase())
               ).length;
@@ -250,7 +269,7 @@ const { data, error } = await supabase
                     <div className="w-12 h-12 rounded-xl bg-[#070f1a] border border-slate-800 flex items-center justify-center text-xl group-hover:border-[#1ed7b5] transition-colors">
                       {company.name === 'Ritco'
                         ? '🚌'
-                        : company.name === 'Volcano'
+                        : company.name === 'Volcano Express'
                         ? '⚡'
                         : company.name === 'Virunga'
                         ? '⛰️'
@@ -336,10 +355,12 @@ const { data, error } = await supabase
                         </div>
                       </div>
                       <div>
-                        <div className="text-[10px] text-slate-500 font-medium">Departs</div>
+                      <div className="text-[10px] text-slate-500 font-medium">Departs</div>
                         <div className="text-xs font-semibold text-slate-200">
                           {trip.departure_time
-                            ? new Date(trip.departure_time).toLocaleTimeString([], {
+                            ? new Date(trip.departure_time).toLocaleString([], {
+                                month: 'short',
+                                day: 'numeric',
                                 hour: '2-digit',
                                 minute: '2-digit',
                               })
