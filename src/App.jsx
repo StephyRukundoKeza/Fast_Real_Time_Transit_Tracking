@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./supabaseClient";
 import "./App.css";
 
+
 import NavigatePage from "./pages/Navigate";
 import Buses from "./pages/Buses";
 import History from "./pages/History";
@@ -14,6 +15,8 @@ import PhoneLogin from "./pages/PhoneLogin";
 import OtpVerification from "./pages/OtpVerification";
 import Payment from "./pages/Payment";
 import Confirm from "./pages/Confirm";
+import SeatSelection from "./pages/SeatSelection";
+import { isValidRwandaPhone } from "./utils/validation";
 
 function App() {
   const isSupabaseConfigured = Boolean(
@@ -112,8 +115,8 @@ function App() {
   const handleSendOtp = async (e) => {
     e.preventDefault();
 
-    if (!phone || phone.length < 10) {
-      setMessage("Please enter a valid phone number.");
+    if (!isValidRwandaPhone(phone)) {
+      setMessage("Enter a valid Rwanda phone number (e.g. +250791234567).");
       return;
     }
 
@@ -208,12 +211,13 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/navigate" replace />} />
 
-          <Route path="/navigate" element={<NavigatePage />} />
+          <Route path="/navigate" element={<NavigatePage user={user} />} />
 
           <Route path="/buses" element={<Buses />} />
 
           <Route path="/payment" element={<Payment user={user} />} />
-
+          <Route path="/seat-selection/:busId" element={<SeatSelection user={user} />} />
+          
           <Route path="/confirm" element={<Confirm />} />
 
           <Route path="/history" element={<History user={user} />} />

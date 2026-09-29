@@ -12,18 +12,18 @@ const FEATURED_COMPANIES = [
 ];
 
 export default function Buses() {
+  const navigate = useNavigate();
   const [buses, setBuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
-  
+
   // Navigation Flow: step 1 = Search UI, step 2 = Company List, step 3 = Active Trips
   const [step, setStep] = useState(1);
   const [tab, setTab] = useState('kigali'); // 'kigali' | 'interdistrict'
   const [originFilter, setOriginFilter] = useState('Nyabugogo');
   const [destinationFilter, setDestinationFilter] = useState('');
-  
+
   const [selectedCompany, setSelectedCompany] = useState(null);
-  const [selectedBus, setSelectedBus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch real trips and join route + bus details from Supabase
@@ -44,10 +44,13 @@ export default function Buses() {
           ),
           buses!bus_id (
             id,
+            bus_number,
             plate_number,
             company_name
           )
-        `);
+        `)
+        .gt('departure_time', new Date().toISOString())
+        .order('departure_time', { ascending: true });
 
       if (error) {
         console.error('Supabase query error:', error);
@@ -73,7 +76,8 @@ export default function Buses() {
       const query = searchQuery.toLowerCase().trim();
 
       const matchesCompany = company.includes(target) || target === 'all';
-      const matchesSearch = !query || origin.includes(query) || destination.includes(query);
+      const matchesSearch =
+        !query || origin.includes(query) || destination.includes(query);
 
       return matchesCompany && matchesSearch;
     });
@@ -223,7 +227,9 @@ export default function Buses() {
           <div className="grid grid-cols-1 gap-3.5">
             {FEATURED_COMPANIES.map((company) => {
               const tripCount = buses.filter((t) =>
-                (t.buses?.company_name || '').toLowerCase().includes(company.name.toLowerCase())
+                (t.buses?.company_name || '')
+                  .toLowerCase()
+                  .includes(company.name.toLowerCase())
               ).length;
 
               return (
@@ -338,9 +344,11 @@ export default function Buses() {
                     <div className="space-y-2">
                       <button
                         onClick={() =>
-                          setSelectedBus({
-                            ...trip,
-                            routeName: `${origin} → ${destination}`,
+                          navigate(`/seat-selection/${trip.buses?.bus_number}`, {
+                            state: {
+                              routeName: `${origin} → ${destination}`,
+                              tripId: trip.id,
+                            },
                           })
                         }
                         className="w-full bg-[#1ed7b5] hover:bg-[#1bc4a4] text-[#070e17] text-xs font-bold py-3 rounded-xl transition-all shadow-lg shadow-[#1ed7b5]/10 active:scale-[0.99]"
@@ -355,253 +363,6 @@ export default function Buses() {
           )}
         </div>
       )}
-
-      {/* Seat Selection Modal */}
-      {selectedBus && (
-        <SeatSelectionModal
-          trip={selectedBus}
-          onClose={() => setSelectedBus(null)}
-        />
-      )}
     </div>
-  );
-}
-
-// ==========================================
-// SEAT SELECTION MODAL
-// ==========================================
-function SeatSelectionModal({ trip, onClose }) {
-  const navigate = useNavigate();
-  const [seats, setSeats] = useState([]);
-  const [selectedSeatIds, setSelectedSeatIds] = useState([]);
-  const [loadingSeats, setLoadingSeats] = useState(true);
-  const [seatError, setSeatError] = useState(null);
-
-  const fetchSeats = async () => {
-    setLoadingSeats(true);
-    setSeatError(null);
-
-    const { data, error } = await supabase
-      .from('seats')
-      .select('*')
-      .eq('trip_id', trip.id)
-      .order('seat_number', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching seats:', error);
-      setSeatError(error.message || 'Failed to load seats. Please try again.');
-    } else {
-      setSeats(data || []);
-    }
-    setLoadingSeats(false);
-  };
-
-  useEffect(() => {
-    fetchSeats();
-
-    // Supabase Realtime Subscription for live updates
-    const channel = supabase
-      .channel(`public:seats:trip_id=eq.${trip.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'seats', filter: `trip_id=eq.${trip.id}` },
-        (payload) => {
-          setSeats((prevSeats) =>
-            prevSeats.map((seat) => (seat.id === payload.new.id ? payload.new : seat))
-          );
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [trip.id]);
-
-  const toggleSeat = (seat) => {
-    if (seat.status !== 'available') return;
-
-    if (selectedSeatIds.includes(seat.id)) {
-      setSelectedSeatIds((prev) => prev.filter((id) => id !== seat.id));
-    } else {
-      if (selectedSeatIds.length >= 4) {
-        alert('You can select a maximum of 4 seats per booking.');
-        return;
-      }
-      setSelectedSeatIds((prev) => [...prev, seat.id]);
-    }
-  };
-
-  const handleProceedToPayment = () => {
-    if (selectedSeatIds.length === 0) return;
-
-    const selectedSeatObjects = seats.filter((s) => selectedSeatIds.includes(s.id));
-
-    navigate('/payment', {
-      state: {
-        tripId: trip.id,
-        busId: trip.buses?.plate_number || 'N/A',
-        routeName: trip.routeName,
-        departureTime: trip.departure_time,
-        seats: selectedSeatObjects,
-      },
-    });
-  };
-
-  const selectedCount = selectedSeatIds.length;
-
-  const seatRows = useMemo(() => {
-    const rows = [];
-    for (let i = 0; i < seats.length; i += 4) {
-      rows.push(seats.slice(i, i + 4));
-    }
-    return rows;
-  }, [seats]);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#091522] border border-slate-800 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl flex flex-col">
-        
-        {/* Modal Header */}
-        <div className="p-5 border-b border-slate-800/80 flex justify-between items-center bg-[#070f1a]">
-          <div>
-            <h2 className="font-extrabold text-white text-base tracking-wide">Select Your Seat</h2>
-            <p className="text-xs text-slate-400 mt-0.5">{trip.routeName}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-sm transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="px-6 py-3 bg-[#050b12] border-b border-slate-800/50 flex justify-between items-center text-xs text-slate-300">
-          <span className="font-mono font-bold text-[#1ed7b5] bg-[#1ed7b5]/10 border border-[#1ed7b5]/30 px-2.5 py-1 rounded text-xs">
-            {trip.buses?.plate_number || 'BUS'}
-          </span>
-          <span className="text-amber-400 font-semibold">{selectedCount}/4 Selected</span>
-        </div>
-
-        {/* Bus Layout Body */}
-        <div className="p-6 bg-[#070e17] flex flex-col items-center">
-          <div className="w-full max-w-[280px] pb-3 mb-5 border-b border-dashed border-slate-800 flex justify-between items-center">
-            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">FRONT</span>
-            <span className="bg-[#1ed7b5]/10 border border-[#1ed7b5]/30 text-[#1ed7b5] text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-              ✦ Driver
-            </span>
-          </div>
-
-          {loadingSeats ? (
-            <div className="py-16 text-slate-500 text-xs animate-pulse">Loading bus seat map...</div>
-          ) : seatError ? (
-            <div className="py-10 px-4 text-center">
-              <p className="text-xs text-red-400 bg-red-950/40 border border-red-800/60 rounded-xl p-3 font-mono">
-                {seatError}
-              </p>
-              <button
-                type="button"
-                onClick={fetchSeats}
-                className="mt-3 text-xs text-[#1ed7b5] underline hover:text-white transition-colors font-semibold"
-              >
-                Retry loading seats
-              </button>
-            </div>
-          ) : seats.length === 0 ? (
-            <div className="py-16 text-slate-500 text-xs text-center">No seat layout available for this bus.</div>
-          ) : (
-            <div className="space-y-3 w-full max-w-[280px]">
-              {seatRows.map((row, rowIndex) => (
-                <div key={rowIndex} className="flex items-center justify-between">
-                  <div className="grid grid-cols-2 gap-2.5 w-[110px]">
-                    {row.slice(0, 2).map((seat) => (
-                      <SeatButton
-                        key={seat.id}
-                        seat={seat}
-                        isSelected={selectedSeatIds.includes(seat.id)}
-                        onToggle={() => toggleSeat(seat)}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="text-[9px] font-mono text-slate-700 tracking-tighter uppercase select-none">
-                    AISLE
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5 w-[110px]">
-                    {row.slice(2, 4).map((seat) => (
-                      <SeatButton
-                        key={seat.id}
-                        seat={seat}
-                        isSelected={selectedSeatIds.includes(seat.id)}
-                        onToggle={() => toggleSeat(seat)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Legend */}
-          <div className="flex items-center justify-center gap-5 mt-6 pt-4 border-t border-slate-800/80 w-full max-w-[280px] text-xs text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded-md border border-[#1ed7b5] bg-[#0d1d2d]"></span>
-              <span>Available</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded-md bg-[#1ed7b5]"></span>
-              <span className="text-white font-medium">Selected</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3.5 h-3.5 rounded-md bg-slate-800/80 border border-slate-700"></span>
-              <span>Taken</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Modal Footer */}
-        <div className="p-4 bg-[#070f1a] border-t border-slate-800">
-          <button
-            disabled={selectedCount === 0}
-            onClick={handleProceedToPayment}
-            className={`
-              w-full py-3.5 rounded-2xl font-bold text-xs transition-all tracking-wide
-              ${
-                selectedCount > 0
-                  ? 'bg-[#1ed7b5] hover:bg-[#1bc4a4] text-[#070e17] shadow-lg shadow-[#1ed7b5]/20 active:scale-[0.98]'
-                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              }
-            `}
-          >
-            {selectedCount > 0 ? `Proceed with ${selectedCount} seat(s)` : 'Select Seats'}
-          </button>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-function SeatButton({ seat, isSelected, onToggle }) {
-  const isTaken = seat.status !== 'available';
-
-  return (
-    <button
-      disabled={isTaken}
-      onClick={onToggle}
-      className={`
-        h-10 rounded-xl border font-bold text-xs transition-all flex items-center justify-center
-        ${
-          isTaken
-            ? 'bg-slate-900/60 border-slate-800 text-slate-600 cursor-not-allowed'
-            : isSelected
-            ? 'bg-[#1ed7b5] border-[#1ed7b5] text-[#070e17] font-black shadow-md shadow-[#1ed7b5]/30 scale-105'
-            : 'bg-[#0d1d2d] border-[#1ed7b5]/40 text-[#1ed7b5] hover:border-[#1ed7b5] hover:bg-[#1ed7b5]/10 active:scale-95'
-        }
-      `}
-    >
-      {seat.seat_number}
-    </button>
   );
 }

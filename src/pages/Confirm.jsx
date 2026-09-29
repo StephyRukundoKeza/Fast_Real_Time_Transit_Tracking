@@ -17,7 +17,7 @@ function formatTripTime(iso) {
 function Confirm() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { busId, routeName, departureTime, seats, bookings, amount, txRef } = location.state || {};
+  const { busId, realBusId, routeName, departureTime, seats, bookings, amount, txRef } = location.state || {};
 
   if (!bookings || bookings.length === 0) {
     return (
@@ -68,6 +68,14 @@ function Confirm() {
       </Card>
 
       <div className="w-full max-w-sm space-y-2">
+        {realBusId && (
+          <Button
+            onClick={() => navigate("/navigate", { state: { busId: realBusId } })}
+            className="w-full"
+          >
+            Track My Bus
+          </Button>
+        )}
         <Button onClick={() => navigate("/history")} className="w-full">
           View My Bookings
         </Button>
