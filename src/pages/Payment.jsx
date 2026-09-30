@@ -341,9 +341,11 @@ export default function Payment({ user }) {
             : "Fare unavailable"}
         </Button>
 
+        {/*
         <p className="mt-3 text-center text-[10px] text-white/30">
-          Test mode: numbers ending in 0000 simulate a declined transaction.
+          Test mode: numbers ending in 0000 simulate a decline; ending in 9999 simulates a timeout.
         </p>
+        */}
       </Card>
     </div>
   );

@@ -17,6 +17,18 @@ const COMPANY_DESCRIPTIONS = {
   'Stella Express': 'Interdistrict corridors',
 };
 
+// Straight-line distance between two lat/lng points, in kilometers.
+function getDistanceKm(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export default function Buses() {
   const navigate = useNavigate();
   const [buses, setBuses] = useState([]);
@@ -28,6 +40,8 @@ export default function Buses() {
   const [tab, setTab] = useState('kigali'); // 'kigali' | 'interdistrict'
   const [originFilter, setOriginFilter] = useState('Nyabugogo');
   const [destinationFilter, setDestinationFilter] = useState('');
+  const [searchError, setSearchError] = useState('');
+  const [locating, setLocating] = useState(false);
   
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,7 +60,9 @@ const { data, error } = await supabase
     routes!route_id (
       id,
       origin,
-      destination
+      destination,
+      is_kigali,
+      stops
     ),
     buses!bus_id (
       id,
@@ -70,11 +86,88 @@ const { data, error } = await supabase
     fetchBuses();
   }, []);
 
-  // Derive the list of companies to show from the actual trip data,
-  // instead of a hardcoded array that can go stale.
+  // Every known stop across all routes, deduplicated by name — used to find
+  // the closest one to the rider's current location.
+  const allStops = useMemo(() => {
+    const map = new Map();
+    buses.forEach((trip) => {
+      (trip.routes?.stops || []).forEach((stop) => {
+        if (stop?.name && typeof stop.lat === 'number' && typeof stop.lng === 'number') {
+          map.set(stop.name, stop);
+        }
+      });
+    });
+    return Array.from(map.values());
+  }, [buses]);
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setSearchError('Your browser does not support location access.');
+      return;
+    }
+    setSearchError('');
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        if (allStops.length === 0) {
+          setSearchError('Stop locations are still loading — try again in a moment.');
+          setLocating(false);
+          return;
+        }
+        let nearest = allStops[0];
+        let nearestDist = getDistanceKm(latitude, longitude, nearest.lat, nearest.lng);
+        allStops.forEach((stop) => {
+          const dist = getDistanceKm(latitude, longitude, stop.lat, stop.lng);
+          if (dist < nearestDist) {
+            nearest = stop;
+            nearestDist = dist;
+          }
+        });
+        setOriginFilter(nearest.name);
+        setLocating(false);
+      },
+      () => {
+        setSearchError('Could not get your location. Please enable location access and try again.');
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // Require a destination before moving on, and only proceed once it's set.
+  const handleProceedToStep2 = () => {
+    if (!destinationFilter.trim()) {
+      setSearchError('Please enter a destination before searching.');
+      return;
+    }
+    setSearchError('');
+    setStep(2);
+  };
+
+  // Only trips whose route matches the selected tab (Within Kigali vs Inter-District)
+  const busesInTab = useMemo(() => {
+    return buses.filter((trip) => Boolean(trip.routes?.is_kigali) === (tab === 'kigali'));
+  }, [buses, tab]);
+
+  // Narrow further to trips whose route actually matches what was searched for.
+  const routeFilteredBuses = useMemo(() => {
+    const origin = originFilter.toLowerCase().trim();
+    const destination = destinationFilter.toLowerCase().trim();
+    return busesInTab.filter((trip) => {
+      const tripOrigin = (trip.routes?.origin || '').toLowerCase();
+      const tripDestination = (trip.routes?.destination || '').toLowerCase();
+      const matchesOrigin = !origin || tripOrigin.includes(origin);
+      const matchesDestination = !destination || tripDestination.includes(destination);
+      return matchesOrigin && matchesDestination;
+    });
+  }, [busesInTab, originFilter, destinationFilter]);
+
+  // Derive the list of companies to show from the actual, route-matching trip
+  // data, instead of a hardcoded array that can go stale.
   const featuredCompanies = useMemo(() => {
     const names = new Set(
-      buses.map((trip) => trip.buses?.company_name).filter(Boolean)
+      routeFilteredBuses.map((trip) => trip.buses?.company_name).filter(Boolean)
     );
     return Array.from(names)
       .sort()
@@ -82,13 +175,13 @@ const { data, error } = await supabase
         name,
         desc: COMPANY_DESCRIPTIONS[name] || 'Scheduled routes',
       }));
-  }, [buses]);
+  }, [routeFilteredBuses]);
 
   // Filter trips for selected company on Step 3
   const filteredTrips = useMemo(() => {
     if (!selectedCompany) return [];
 
-    return buses.filter((trip) => {
+    return routeFilteredBuses.filter((trip) => {
       const company = (trip.buses?.company_name || '').toLowerCase();
       const target = selectedCompany.toLowerCase();
       const origin = (trip.routes?.origin || '').toLowerCase();
@@ -100,7 +193,7 @@ const { data, error } = await supabase
 
       return matchesCompany && matchesSearch;
     });
-  }, [buses, selectedCompany, searchQuery]);
+  }, [routeFilteredBuses, selectedCompany, searchQuery]);
 
   return (
     <div className="min-h-screen bg-[#070e17] text-slate-100 p-5 pb-28 font-sans">
@@ -194,6 +287,14 @@ const { data, error } = await supabase
                 placeholder="Origin (e.g. Nyabugogo)..."
                 className="w-full bg-transparent text-xs font-bold text-white focus:outline-none"
               />
+              <button
+                type="button"
+                onClick={handleUseMyLocation}
+                disabled={locating}
+                className="text-[10px] font-bold text-[#1ed7b5] mt-1.5 disabled:opacity-50"
+              >
+                {locating ? 'Locating…' : '📍 Use my current location'}
+              </button>
             </div>
 
             <div className="bg-[#071426] border border-slate-800 rounded-xl p-3">
@@ -209,9 +310,13 @@ const { data, error } = await supabase
               />
             </div>
 
+            {searchError && (
+              <p className="text-[11px] text-red-400 font-semibold">{searchError}</p>
+            )}
+
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={handleProceedToStep2}
               className="w-full bg-amber-500 hover:bg-amber-400 text-[#070e17] font-bold py-3 rounded-xl text-xs transition-all shadow-lg shadow-amber-500/10"
             >
               Search Buses
@@ -232,7 +337,7 @@ const { data, error } = await supabase
 
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={handleProceedToStep2}
               className="w-full bg-[#1ed7b5] hover:bg-[#1bc4a4] text-[#070e17] text-xs font-bold py-3 rounded-xl transition-all shadow-lg shadow-[#1ed7b5]/10"
             >
               View Buses
@@ -247,53 +352,60 @@ const { data, error } = await supabase
       {step === 2 && (
         <div className="space-y-4 mt-6">
           <p className="text-xs text-slate-400 mb-2">
-            Choose an agency to view active trips, live tracking, and select seats.
+            Showing agencies for {originFilter || 'anywhere'} → {destinationFilter || 'anywhere'}.
           </p>
 
-          <div className="grid grid-cols-1 gap-3.5">
-            {featuredCompanies.map((company) => {
-              const tripCount = buses.filter((t) =>
-                (t.buses?.company_name || '').toLowerCase().includes(company.name.toLowerCase())
-              ).length;
+          {featuredCompanies.length === 0 ? (
+            <div className="bg-[#0d1926] border border-slate-800/80 rounded-2xl p-8 text-center text-xs text-slate-400">
+              No buses found from {originFilter || 'your origin'} to {destinationFilter || 'that destination'}
+              {' '}in {tab === 'kigali' ? 'Within Kigali' : 'Inter-District'}. Try the other tab or a different destination.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3.5">
+              {featuredCompanies.map((company) => {
+                const tripCount = routeFilteredBuses.filter((t) =>
+                  (t.buses?.company_name || '').toLowerCase().includes(company.name.toLowerCase())
+                ).length;
 
-              return (
-                <div
-                  key={company.name}
-                  onClick={() => {
-                    setSelectedCompany(company.name);
-                    setStep(3);
-                  }}
-                  className="bg-[#0d1d2d] border border-slate-800 hover:border-[#1ed7b5] rounded-2xl p-4 cursor-pointer transition-all flex items-center justify-between group shadow-lg active:scale-[0.99]"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-xl bg-[#070f1a] border border-slate-800 flex items-center justify-center text-xl group-hover:border-[#1ed7b5] transition-colors">
-                      {company.name === 'Ritco'
-                        ? '🚌'
-                        : company.name === 'Volcano Express'
-                        ? '⚡'
-                        : company.name === 'Virunga'
-                        ? '⛰️'
-                        : company.name === 'Horizon'
-                        ? '🌅'
-                        : '🚐'}
+                return (
+                  <div
+                    key={company.name}
+                    onClick={() => {
+                      setSelectedCompany(company.name);
+                      setStep(3);
+                    }}
+                    className="bg-[#0d1d2d] border border-slate-800 hover:border-[#1ed7b5] rounded-2xl p-4 cursor-pointer transition-all flex items-center justify-between group shadow-lg active:scale-[0.99]"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-xl bg-[#070f1a] border border-slate-800 flex items-center justify-center text-xl group-hover:border-[#1ed7b5] transition-colors">
+                        {company.name === 'Ritco'
+                          ? '🚌'
+                          : company.name === 'Volcano Express'
+                          ? '⚡'
+                          : company.name === 'Virunga'
+                          ? '⛰️'
+                          : company.name === 'Horizon'
+                          ? '🌅'
+                          : '🚐'}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white group-hover:text-[#1ed7b5] transition-colors">
+                          {company.name}
+                        </h3>
+                        <p className="text-[11px] text-slate-400">{company.desc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-white group-hover:text-[#1ed7b5] transition-colors">
-                        {company.name}
-                      </h3>
-                      <p className="text-[11px] text-slate-400">{company.desc}</p>
+
+                    <div className="text-right">
+                      <span className="text-[10px] font-mono bg-[#1ed7b5]/10 text-[#1ed7b5] border border-[#1ed7b5]/30 px-2.5 py-1 rounded-full font-bold">
+                        {loading ? '...' : `${tripCount} Trips`}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="text-right">
-                    <span className="text-[10px] font-mono bg-[#1ed7b5]/10 text-[#1ed7b5] border border-[#1ed7b5]/30 px-2.5 py-1 rounded-full font-bold">
-                      {loading ? '...' : `${tripCount} Trips`}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -306,7 +418,7 @@ const { data, error } = await supabase
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${selectedCompany} routes (e.g. Kigali, Musanze)...`}
+            placeholder={`Refine within ${selectedCompany} (e.g. Kigali, Musanze)...`}
             className="w-full bg-[#0d1926] border border-slate-800 rounded-2xl py-3 px-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#1ed7b5] transition-colors mb-4"
           />
 

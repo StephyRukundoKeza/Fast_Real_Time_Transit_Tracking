@@ -2,11 +2,14 @@
 // the same shape a real gateway (Flutterwave, DPO, Pesapal) would have, so
 // swapping in a real provider later only means replacing this file.
 //
-// Testing hook: any phone number ending in "0000" simulates a declined
-// payment, so you can demo both the success and failure paths.
+// Testing hooks: a phone number ending in "0000" simulates a declined
+// payment, and one ending in "9999" simulates a gateway timeout — so you
+// can demo the success, decline, and timeout paths.
 
 const CHARGE_DELAY_MS = 2500; // simulate the few seconds a real mobile money prompt takes
 const DECLINE_SUFFIX = "0000";
+const TIMEOUT_SUFFIX = "9999";
+const TIMEOUT_DELAY_MS = 8000; // simulate a gateway that never responds in time
 
 let mockTxCounter = 0;
 
@@ -27,8 +30,16 @@ export async function initiatePayment({ phoneNumber, amount, currency = "RWF", e
 }
 
 export async function pollUntilFinal(transactionId, { phoneNumber } = {}) {
+  const cleaned = phoneNumber ? phoneNumber.replace(/\s/g, "") : "";
+
+  if (cleaned.endsWith(TIMEOUT_SUFFIX)) {
+    await sleep(TIMEOUT_DELAY_MS);
+    console.log(`[mockProvider] ${transactionId} timed out (mock)`);
+    return { transactionId, status: "timeout", success: false, message: "Payment timed out. Please try again." };
+  }
+
   await sleep(CHARGE_DELAY_MS);
-  const declined = phoneNumber && phoneNumber.replace(/\s/g, "").endsWith(DECLINE_SUFFIX);
+  const declined = cleaned.endsWith(DECLINE_SUFFIX);
   if (declined) {
     console.log(`[mockProvider] ${transactionId} declined (mock)`);
     return { transactionId, status: "failed", success: false, message: "Payment declined" };
